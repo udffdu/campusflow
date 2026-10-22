@@ -1,0 +1,27 @@
+{
+  "name": "CampusFlow",
+  "display_name": "校园资源协同平台",
+  "slug": "campusflow",
+  "phase": "preparation",
+  "organization": "udffdu",
+  "repository": {"visibility": "public", "creation_status": "not_verified", "url": null},
+  "team_size": 6,
+  "stack": {"backend": "Spring Boot", "frontend": "Vue 3", "database": "PostgreSQL", "versions": "pending"},
+  "cloud": {"provider": "Huawei Cloud", "provisioning_status": "not_requested"},
+  "scope": "mandatory_first",
+  "modules": [
+    {"id": "D", "path": "services/platform", "owner": "dianashiba", "reviewer": null},
+    {"id": "M1", "path": "services/seats", "owner": null, "reviewer": null},
+    {"id": "M2", "path": "services/rooms", "owner": "dianashiba", "reviewer": null},
+    {"id": "M3", "path": "services/maintenance", "owner": null, "reviewer": null}
+  ],
+  "shared_responsibilities": {"frontend_shell": null, "delivery": null, "integration_tests": null},
+  "pending_decisions": [
+    "模块成员、D 备用评审人与公共工程责任",
+    "服务部署边界及依赖版本",
+    "M2 待审占用、冲突、期限和取消策略",
+    "维修对既有预约与申请的影响",
+    "资源主数据变更传播与生效规则",
+    "云资源预算、发布审批与回退方案"
+  ]
+}

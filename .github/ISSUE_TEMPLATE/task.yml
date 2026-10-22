@@ -1,0 +1,34 @@
+name: 需求与开发任务
+description: 明确范围、依赖和验收后再实现
+title: "[TASK] "
+body:
+  - type: input
+    id: requirement
+    attributes:
+      label: 需求编号
+      placeholder: CF-M2-001
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 目标与范围
+      description: 说明负责模块、需要改变的行为及边界。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 写出可观察的成功、失败及必要边界场景。
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 依赖、接口与待决问题
+  - type: textarea
+    id: plan
+    attributes:
+      label: 实现方案与验证方式
+      description: 先写方案，后记录实际执行结果。

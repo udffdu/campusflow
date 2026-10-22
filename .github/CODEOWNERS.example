@@ -1,0 +1,6 @@
+# 示例文件不生效。其他成员及团队确认后，将经评审的配置保存为 CODEOWNERS。
+# 目前唯一已确认的 GitHub 用户是 dianashiba，先展示其负责范围。
+/services/platform/ @dianashiba
+/services/rooms/ @dianashiba
+# 前端模块、contracts、迁移、infra、.github 需补充真实负责人及备用评审人。
+# 同一路径列出多位 owner，不代表 GitHub 强制要求每人均批准。

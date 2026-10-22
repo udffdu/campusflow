@@ -1,0 +1,21 @@
+name: 缺陷
+description: 记录可以复现的行为问题
+title: "[BUG] "
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤、环境与版本
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 预期与实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据、相关需求与影响
+      description: 不粘贴令牌、密码或真实个人信息。

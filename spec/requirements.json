@@ -1,0 +1,91 @@
+{
+  "register_status": "partial_draft",
+  "coverage_note": "启动阶段的 M2/D、集成及工程要求登记。M1/M3 全量需求由各负责人补充；不宣称完整覆盖或已冻结。",
+  "requirements": [
+    {
+      "id": "CF-M2-001", "module": "M2", "title": "申请资格与提交",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["有资格用户可为指定教室和时段提交申请并查询本人记录", "无资格或越范围的提交被拒绝", "无效时间和不存在或停用的教室被拒绝"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-M2-002", "module": "M2", "title": "顺序多级审批",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["审批按配置节点顺序推进并记录操作者与意见", "不能跳级、重复决策或审批自己的申请", "审批同时校验权限与资源管理范围"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-M2-003", "module": "M2", "title": "申请超时与撤销",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["达到已记录截止时间的未决申请自动撤销", "任务重启和重复执行不造成重复释放", "审批、超时与撤销并发时只保留合法结果"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-M2-004", "module": "M2", "title": "审批与实际占用协调",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["仅在 M1 确认占用成功后展示已批准", "资源冲突不会覆盖个人预约", "远程请求超时可查询和恢复，处理中状态对用户可见"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-D-001", "module": "D", "title": "身份与权限范围",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["未登录和无权限的访问被拒绝", "跨院系或跨资源范围操作被拒绝", "内部调用不能伪造服务来源", "账号禁用及权限变更按约定期限生效"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-D-002", "module": "D", "title": "空间与座位主数据",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["按权限维护教室、座位、开放规则及属性", "其他模块通过契约读取同一套编号和版本", "被业务引用的资源停用后不破坏历史记录"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-D-003", "module": "D", "title": "可靠通知",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["通过至少一种真实通知渠道验证接收", "相同事件重复提交不会重复创建投递任务", "失败可重试且记录投递结果", "通知故障不丢失已完成的业务结果"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-D-004", "module": "D", "title": "审计与最少数据访问",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["关键业务动作可追踪操作者、来源、对象、时间与结果", "重复事件去重", "越权查询审计被拒绝且不记录密码令牌等机密"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-INT-001", "module": "INT", "title": "M2 占用与 M1 预约互斥",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["真实网络调用完成审批占用和撤销释放", "个人预约与整教室占用并发时不出现双重成功", "可查看 M2 申请作为占用来源"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-INT-002", "module": "INT", "title": "维修限制按来源解除",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["维修中工单通过网络使对应教室全部座位下架", "两个维修工单只解除一个时教室仍受限", "维修解除不清除 M2 时段占用", "来源可追溯至具体工单"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-INT-003", "module": "INT", "title": "重复与乱序请求恢复",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["相同操作重复发送不重复生效", "旧创建请求不能复活已释放占用", "调用成功但响应丢失时可查询恢复"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-ENG-001", "module": "ENG", "title": "版本管理与人机协作",
+      "baseline_status": "proposed", "status": "in_progress",
+      "acceptance": ["规则、需求、决策和代码随迭代提交", "AI 变更经人工验收，PR 经其他成员评审", "冲突由人类处理", "公共层归属有真实组内决策记录"],
+      "implementation": ["AGENTS.md", "CONTRIBUTING.md", "docs/architecture/adr-0001-repository-and-services.md"],
+      "verification": []
+    },
+    {
+      "id": "CF-ENG-002", "module": "ENG", "title": "构建、测试与完整交付流水线",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["提交和 PR 触发真实构建测试，失败阻断后续阶段和合并", "测试环境自动部署全部模块", "生产人工批准发布且可追踪版本", "全新环境部署、生产发布和回退可现场演示"],
+      "implementation": [], "verification": []
+    },
+    {
+      "id": "CF-ENG-003", "module": "ENG", "title": "数据库演进与有效测试",
+      "baseline_status": "proposed", "status": "planned",
+      "acceptance": ["版本化迁移可从空库重放至最新，重复执行迁移工具安全", "幂等种子与业务数据分离", "schema 变更经评审且在流水线自动执行", "故意破坏关键实现会使对应测试失败"],
+      "implementation": [], "verification": []
+    }
+  ]
+}
