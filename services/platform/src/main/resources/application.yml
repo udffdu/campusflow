@@ -1,0 +1,29 @@
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+spring:
+  application:
+    name: campusflow-platform
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/campusflow}
+    username: ${DATABASE_USER:campusflow}
+    password: ${DATABASE_PASSWORD:}
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  flyway:
+    enabled: true
+platform:
+  cookie-secure: ${COOKIE_SECURE:true}
+  session-hours: 8
+  bootstrap-password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+  service-keys:
+    M1: ${M1_SERVICE_KEY:}
+    M2: ${M2_SERVICE_KEY:}
+    M3: ${M3_SERVICE_KEY:}
+  delivery-delay-ms: 3000
+logging:
+  level:
+    org.springframework.security: WARN

@@ -1,6 +1,19 @@
 # 环境与交付配置
 
-当前无服务器、云资源或已生效的部署配置。
+本次提供 D + web + PostgreSQL 的本地持久化编排。华为云尚未申请；这不是全组生产交付配置。
+
+需要 Docker Compose v2。在本目录复制 `.env.example` 为被忽略的 `.env`，替换所有密码占位值，再运行：
+
+```sh
+docker compose --env-file .env up --build -d
+```
+
+打开 [本地应用](http://127.0.0.1:8088)，账号 admin，密码为你设置的初始化密码。数据库使用命名卷持久化，日常运行 `docker compose down` 停止并保留数据，不要附带删除卷选项。
+仅网页端口绑定宿主回环，数据库与后端没有宿主端口。后端启动时 Flyway 自动迁移；服务密钥初始为空，禁用内部调用。正式 HTTPS 须设置 COOKIE_SECURE=true。
+
+当前环境没有 Docker，本次已验证独立 Java/Vue 与真实 PostgreSQL 17 的运行，尚未验证镜像构建和 Compose 启动。基础镜像标签尚未锁定 digest，发布前应确认制品来源。
+
+云端仍待完成：
 
 - 讨论候选：Docker Compose；开发、测试、生产的数据库、配置和凭据隔离。
 - 华为云规格、系统版本、网络与预算待确认；不在预备阶段采购。

@@ -2,13 +2,13 @@
 
 以自习座位预约为核心，连接整教室申请审批与物业报修的课程实践项目。
 
-当前阶段：项目启动与接口讨论。尚无业务实现、可运行应用或云端部署；目录和 CI 的存在不代表业务已经完成。
+当前阶段：D 公共层与前端公共外壳已实现，用户于 2026-10-23 确认本版并授权提交推送，跨模块契约仍待组内评审。M1/M2/M3 的业务待对应负责人实现；尚未部署华为云。
 
 ## 已确认的上下文
 
 - 团队 6 人，模块已分工；`dianashiba` 负责 M2 和公共层 D。
-- 技术讨论基线：Spring Boot + Vue 3 + PostgreSQL；具体版本和依赖尚未锁定。
-- GitHub 组织：`udffdu`；项目名称：CampusFlow；拟使用仓库名：`campusflow`。
+- 技术版本：Java 21、Spring Boot 3.5.16、PostgreSQL 17.11、Vue 3.5.44、Vite 8.3.5；Maven Wrapper 与 npm 锁文件已加入。
+- GitHub 公开仓库：[udffdu/campusflow](https://github.com/udffdu/campusflow)。
 - 用户已确认课程允许公开仓库。远程创建与保护规则是否生效，以实际 GitHub 状态为准。
 - 华为云服务器尚未申请；先完成必做项，自然语言业务代理暂不进入开发范围。
 
@@ -43,12 +43,39 @@ scripts/                  仓库检查及未来运维脚本
 python3 scripts/check_repository.py
 ```
 
-当前检查只验证仓库约定，不包含应用构建、业务测试或部署。应用代码加入时必须同步补充相应检查。
+该脚本只检查仓库登记。应用验证请执行：
+
+```sh
+cd services/platform
+./mvnw verify
+cd ../../apps/web
+npm ci
+npm test
+npm run build
+```
+
+后端测试启动真实 PostgreSQL 17，覆盖认证、范围权限、版本冲突、通知重试与审计。CI 配置相同测试和构建；远程结果以 GitHub Actions 中对应提交的检查为准。
+
+## 本地运行
+
+需要 Java 21、Node 22.12+，首次运行需下载依赖，Maven 无需预装。隔离演示无需系统 PostgreSQL 或 Docker：
+
+```sh
+./scripts/run-local-demo.sh
+# 另开终端：
+cd apps/web
+npm ci
+npm run dev
+```
+
+脚本会提示为本次演示设置 `admin` 密码，不回显；也可通过 `BOOTSTRAP_ADMIN_PASSWORD` 环境变量注入。打开 [本地工作台](http://127.0.0.1:5173)。演示数据库随进程结束清理，样例数据与正式业务数据分离。持久化开发环境见 [环境说明](infra/README.md)。
 
 ## 关键文档
 
 - [架构决策：单仓库与服务边界](docs/architecture/adr-0001-repository-and-services.md)
 - [M2 需求与待决规则](docs/requirements/m2.md)
+- [D 实现范围](docs/requirements/d.md) · [D 接口契约](contracts/platform-api.md)
+- [本次验证与验收记录](docs/process/d-validation.md)
 - [风险与工程伦理](docs/requirements/risks-and-ethics.md)
 - [GitHub 配置与发布清单](docs/process/github-setup.md)
 - [首次提交验收清单](docs/process/bootstrap-review.md)
