@@ -1,0 +1,37 @@
+name: campusflow
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: campusflow
+      POSTGRES_USER: campusflow
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in an ignored .env file}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campusflow -d campusflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  platform:
+    build: ../services/platform
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/campusflow
+      DATABASE_USER: campusflow
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      M1_SERVICE_KEY: ${M1_SERVICE_KEY:-}
+      M2_SERVICE_KEY: ${M2_SERVICE_KEY:-}
+      M3_SERVICE_KEY: ${M3_SERVICE_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+  web:
+    build: ../apps/web
+    ports:
+      - "127.0.0.1:8088:80"
+    depends_on:
+      - platform
+volumes:
+  postgres-data:

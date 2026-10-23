@@ -1,18 +1,17 @@
 # 跨模块接口清单（待组内评审）
 
-这里是契约讨论清单，不是已经实现或冻结的 OpenAPI。
+M1 接口仍是讨论稿；D 已实现的请求和响应以 [D API v1](platform-api.md) 为准，尚待受影响负责人评审。
 每个模块拥有自己的契约；调用方共同评审变更，禁止共享数据库实体作为接口。
 
 | 提供方 | 接口草案 | 调用方 | 验收重点 |
 | --- | --- | --- | --- |
-| D | `GET /api/v1/me` | web | 当前用户、权限和数据范围，不能伪造身份 |
-| D | `GET /internal/v1/users/{id}` | M1/M2/M3 | 最少必要信息、服务认证 |
-| D | `POST /internal/v1/authorization/check` | 敏感写操作 | 动作与具体资源范围校验 |
-| D | `GET /api/v1/rooms` | web | 基础筛选；不声称此刻可预约 |
-| D | `GET /internal/v1/rooms/{id}` | M1/M2/M3 | 开放规则、归属、启停、版本 |
-| D | `GET /internal/v1/rooms/{id}/seats` | M1 | 座位属性和启停 |
+| D | `GET /api/v1/auth/me` | web | 当前用户、权限和数据范围，不能伪造身份 |
+| D | `POST /internal/v1/authorization` | 敏感写操作 | 动作与具体资源范围校验 |
+| D | `GET /api/v1/resources?type=ROOM` | web | 基础筛选；不声称此刻可预约 |
+| D | `GET /internal/v1/resources/{id}` | M1/M2/M3 | 开放规则、归属、启停、版本 |
+| D | `GET /internal/v1/resources?type=SEAT&parentId={id}` | M1 | 座位属性和启停 |
 | D | `POST /internal/v1/notifications` | M1/M2/M3 | 持久化接收、事件去重、投递失败重试 |
-| D | `POST /internal/v1/audit-events` | M1/M2/M3 | 事件去重、权限、可追溯 |
+| D | `POST /internal/v1/audit` | M1/M2/M3 | 事件去重、权限、可追溯 |
 | M1 | `GET /internal/v1/rooms/{id}/availability` | M2 | 按时段预检查，不构成占用承诺 |
 | M1 | `PUT /internal/v1/room-occupancies/{applicationId}` | M2 | 原子占用或释放、去重、防乱序 |
 | M1 | `GET /internal/v1/room-occupancies/{applicationId}` | M2 | 超时后查询并恢复 |
@@ -21,13 +20,13 @@
 ## 公共约定草案
 
 - 外部 API 与内部 API 分开；内部 API 也认证，校验调用服务的来源权限。
-- 标识符作为不透明字符串传输；实际生成方案待定。
+- D 主数据采用稳定 UUID；跨模块仍作为不透明字符串传输，业务对象由各模块生成。
 - 时间使用带偏移的 ISO 8601，存储绝对时间，按 `Asia/Shanghai` 展示；时段为 `[startAt, endAt)`。
 - 整教室占用请求含教室、起止时间、来源编号、目标状态、递增操作版本和 traceId。
 - M1 按调用身份校验来源类型；相同来源和版本相同内容重复请求返回同一结果，不同内容拒绝。
 - 旧版本请求不得复活已撤销的占用；释放后保留足够的版本记录。
 - M1 对个人预约与整教室占用采用共同的原子并发控制；跨表规则不能只靠一张表的唯一约束。
-- 区分 401、403、404、409、参数错误和暂时不可用；统一错误体、分页、重试条件尚待冻结。
+- 区分 401、403、404、409、参数错误和暂时不可用；D 的错误体、分页与重试约定见实现契约；其余模块共同评审。
 - 业务模块在本地事务中保存待发送事件；D 接收后按 eventId 去重，失败可重试。
 - 开放时间、资源停用变更的传播与生效规则待评审，防止旧快照继续允许新预约。
 

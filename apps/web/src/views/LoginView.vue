@@ -1,0 +1,11 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { api, message } from '../api'
+import { refreshUnread, session } from '../session'
+import type { Identity } from '../types'
+import Icon from '../components/Icon.vue'
+const username=ref('');const password=ref('');const error=ref('');const busy=ref(false);const router=useRouter();const route=useRoute()
+async function login() {busy.value=true;error.value='';try { session.user=await api<Identity>('/auth/login','POST',{username:username.value,password:password.value});session.ready=true;password.value='';void refreshUnread().catch(()=>{});await router.replace('/') } catch(e) {error.value=message(e)} finally {busy.value=false} }
+</script>
+<template><div class="login-page"><section class="login-story"><div class="brand light"><span class="brand-mark">c<span>f</span></span><span>CampusFlow<small>校园资源协同平台</small></span></div><div class="login-copy"><span class="eyebrow light-text">A MORE CONNECTED CAMPUS</span><h1>每一处空间，<br>都有新的可能。</h1><p>从一张座位，到一间教室。<br>让校园资源流动起来，让日常协作简单一些。</p><div class="campus-art" aria-hidden="true"><div class="art-building a"><i/><i/><i/><i/><i/><i/></div><div class="art-building b"><i/><i/><i/><i/><i/><i/><i/><i/><i/></div><div class="art-building c"><i/><i/><i/><i/></div><div class="art-ground"/><span class="art-tree one"/><span class="art-tree two"/></div></div><small>连接空间 · 连接服务 · 连接你</small></section><section class="login-form-panel"><form class="login-form" @submit.prevent="login"><span class="eyebrow">WELCOME TO CAMPUSFLOW</span><h2>欢迎回来</h2><p class="muted">登录你的账号，开始今天的校园协作。</p><div v-if="route.query.changed" class="success-note" role="status">密码已更新，请使用新密码登录。</div><label>账号<input v-model="username" autocomplete="username" placeholder="输入你的账号" required maxlength="48" autofocus></label><label>密码<input v-model="password" type="password" autocomplete="current-password" placeholder="输入登录密码" required maxlength="72"></label><p v-if="error" class="form-error" role="alert">{{error}}</p><button class="button login-submit" :disabled="busy">{{busy?'正在登录…':'登录工作空间'}}<Icon name="arrow" :size="18"/></button><p class="login-help"><Icon name="shield" :size="15"/>账号由平台管理员开通。如需帮助，请联系本组负责人。</p></form><small class="login-copyright">CampusFlow · 校园资源协同平台</small></section></div></template>
