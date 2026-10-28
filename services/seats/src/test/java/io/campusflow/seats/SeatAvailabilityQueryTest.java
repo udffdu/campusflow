@@ -182,6 +182,25 @@ class SeatAvailabilityQueryTest {
         return query.query(scope, room, seats, period(start, end));
     }
 
+    @Test void powerFilterUsesExactSeatMarkerAndStillExcludesOccupiedSeats() {
+        seats=List.of(new SeatSnapshot(seatId,roomId,department,"01",true,Set.of("POWER_OUTLET")),
+                new SeatSnapshot(secondSeatId,roomId,department,"02",true,Set.of("电源","power_outlet")));
+        var identity=new ReservationAccessPolicy.IdentitySnapshot(user,department,Set.of("seats.availability.read"));
+        assertEquals(List.of(seatId),ids(query.queryForIdentity(identity,room,seats,period("09:00","11:00"),true)));
+        assertEquals(List.of(seatId,secondSeatId),ids(query.queryForIdentity(identity,room,seats,period("09:00","11:00"),false)));
+        reserve(UUID.randomUUID(),roomId,seatId,"09:00","11:00");
+        assertTrue(query.queryForIdentity(identity,room,seats,period("09:00","11:00"),true).seats().isEmpty());
+    }
+
+    @Test void identityQueryCombinesRoomScopeAndExistingAvailabilityRules() {
+        var foreignIdentity=new ReservationAccessPolicy.IdentitySnapshot(user,UUID.randomUUID(),Set.of("seats.availability.read"));
+        assertThrows(SecurityException.class,()->query.queryForIdentity(foreignIdentity,room,seats,period("09:00","10:00"),false));
+        room=new RoomSnapshot(roomId,department,true,room.openingHours(),ReservationAccessPolicy.BookingScope.CAMPUS);
+        assertEquals(List.of(seatId,secondSeatId),ids(query.queryForIdentity(foreignIdentity,room,seats,period("09:00","10:00"),false)));
+        room=new RoomSnapshot(roomId,department,false,room.openingHours(),ReservationAccessPolicy.BookingScope.CAMPUS);
+        assertEquals(Reason.ROOM_INACTIVE,query.queryForIdentity(foreignIdentity,room,seats,period("09:00","10:00"),false).reason());
+    }
+
     private ReservationRecord reserve(UUID owner, UUID room, UUID seat, String start, String end) {
         return store.create(new CreateReservation(owner, room, seat, period(start, end), 7), UUID.randomUUID().toString());
     }

@@ -21,6 +21,18 @@ public final class SeatAvailabilityQuery {
     }
 
     public Result query(AccessScope scope, RoomSnapshot room, List<SeatSnapshot> seats, TimeRange period) {
+        return query(scope, room, seats, period, false);
+    }
+
+    /** The identity still must come from a D-authenticated adapter; this method performs business checks. */
+    public Result queryForIdentity(ReservationAccessPolicy.IdentitySnapshot identity, RoomSnapshot room,
+                                   List<SeatSnapshot> seats, TimeRange period, boolean requiresPower) {
+        return query(ReservationAccessPolicy.scopeFor(identity, ReservationAccessPolicy.Action.QUERY, room),
+                room, seats, period, requiresPower);
+    }
+
+    public Result query(AccessScope scope, RoomSnapshot room, List<SeatSnapshot> seats,
+                        TimeRange period, boolean requiresPower) {
         Objects.requireNonNull(scope, "scope");
         Objects.requireNonNull(room, "room");
         if (!scope.allowedRoomIds().contains(room.id())) {
@@ -40,6 +52,7 @@ public final class SeatAvailabilityQuery {
         var occupancy = store.personalOccupancy(scope.userId(), room.id(), period);
         if (occupancy.userConflict()) return new Result(Reason.USER_TIME_CONFLICT, List.of());
         var options = candidates.stream().filter(SeatSnapshot::effectiveActive)
+                .filter(seat -> !requiresPower || seat.features().contains("POWER_OUTLET"))
                 .filter(seat -> !occupancy.occupiedSeatIds().contains(seat.id()))
                 .sorted(Comparator.comparing(SeatSnapshot::code).thenComparing(SeatSnapshot::id))
                 .map(seat -> new SeatOption(seat.id(), seat.code())).toList();
@@ -55,20 +68,30 @@ public final class SeatAvailabilityQuery {
     }
 
     /** Typed M1 input, not a D entity. The adapter must verify D's resource type when mapping. */
-    public record RoomSnapshot(UUID id, UUID departmentId, boolean effectiveActive, OpeningSchedule openingHours) {
+    public record RoomSnapshot(UUID id, UUID departmentId, boolean effectiveActive, OpeningSchedule openingHours,
+                               ReservationAccessPolicy.BookingScope bookingScope) {
+        public RoomSnapshot(UUID id, UUID departmentId, boolean effectiveActive, OpeningSchedule openingHours) {
+            this(id, departmentId, effectiveActive, openingHours, ReservationAccessPolicy.BookingScope.DEPARTMENT);
+        }
         public RoomSnapshot {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(departmentId, "departmentId");
             Objects.requireNonNull(openingHours, "openingHours");
+            Objects.requireNonNull(bookingScope, "bookingScope");
         }
     }
 
-    public record SeatSnapshot(UUID id, UUID roomId, UUID departmentId, String code, boolean effectiveActive) {
+    public record SeatSnapshot(UUID id, UUID roomId, UUID departmentId, String code, boolean effectiveActive,
+                               Set<String> features) {
+        public SeatSnapshot(UUID id, UUID roomId, UUID departmentId, String code, boolean effectiveActive) {
+            this(id, roomId, departmentId, code, effectiveActive, Set.of());
+        }
         public SeatSnapshot {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(roomId, "roomId");
             Objects.requireNonNull(departmentId, "departmentId");
             if (code == null || code.isBlank()) throw new IllegalArgumentException("座位编号不能为空");
+            features = Set.copyOf(Objects.requireNonNull(features, "features"));
         }
     }
 

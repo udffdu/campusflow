@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Confirm time, lock and partial availability tests detect broken disposable source copies."""
+"""Confirm M1 and D supplement tests detect broken disposable source copies."""
 
 import argparse
 import hashlib
@@ -12,8 +12,6 @@ import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE = ROOT / "services/seats"
-PACKAGE = Path("src/main/java/io/campusflow/seats")
 MUTATIONS = [
     ("adjacent_overlap", "TimeRange.java",
      "startAt.isBefore(other.endAt) && other.startAt.isBefore(endAt)",
@@ -38,27 +36,57 @@ MUTATIONS = [
      "if (occupancy.userConflict())", "if (false)",
      "ownOverlapInAnotherRoomReturnsExplicitConflict",
      "SeatAvailabilityQueryTest#ownOverlapInAnotherRoomReturnsExplicitConflict"),
+    ("missing_outlet_filter", "SeatAvailabilityQuery.java",
+     '.filter(seat -> !requiresPower || seat.features().contains("POWER_OUTLET"))', '.filter(seat -> true)',
+     "powerFilterUsesExactSeatMarkerAndStillExcludesOccupiedSeats",
+     "SeatAvailabilityQueryTest#powerFilterUsesExactSeatMarkerAndStillExcludesOccupiedSeats"),
+    ("missing_department_booking_scope", "ReservationAccessPolicy.java",
+     "room.bookingScope() == BookingScope.DEPARTMENT", "false",
+     "departmentRoomsRejectOtherDepartmentsEvenWithAllBusinessPermissions",
+     "ReservationAccessPolicyTest#departmentRoomsRejectOtherDepartmentsEvenWithAllBusinessPermissions"),
+    ("missing_seat_permission", "ReservationAccessPolicy.java",
+     "!identity.permissions().contains(action.permission())", "false",
+     "catalogOrAdministrativePermissionsDoNotGrantSeatAccess",
+     "ReservationAccessPolicyTest#catalogOrAdministrativePermissionsDoNotGrantSeatAccess"),
+]
+PLATFORM_MUTATIONS = [
+    ("reset_scope_on_legacy_update", "ResourceService.java",
+     "return requested!=null?requested:current!=null?current:BookingScope.DEPARTMENT;",
+     "return requested!=null?requested:BookingScope.DEPARTMENT;",
+     "roomScopeSurvivesLegacyUpdatesAndIsVisibleThroughInternalApi",
+     "PlatformIntegrationTest#roomScopeSurvivesLegacyUpdatesAndIsVisibleThroughInternalApi"),
+    ("room_outlet_marker_allowed", "ResourceService.java",
+     'if(!type.equals("SEAT")&&features.contains("POWER_OUTLET"))', "if(false)",
+     "powerOutletMarkerBelongsToIndividualSeatsAndRoundTrips",
+     "PlatformIntegrationTest#powerOutletMarkerBelongsToIndividualSeatsAndRoundTrips"),
+    ("seat_role_unprotected", "RoleService.java",
+     '"AUDITOR","MEMBER","SEAT_USER"', '"AUDITOR","MEMBER"',
+     "seatRoleIsProtectedAndCustomRolesCanSelectRegisteredSeatPermissions",
+     "PlatformIntegrationTest#seatRoleIsProtectedAndCustomRolesCanSelectRegisteredSeatPermissions"),
 ]
 
 
-def source_hashes():
-    return {str(p.relative_to(CORE)): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in (CORE / "src").rglob("*.java")}
+def source_hashes(core):
+    return {str(p.relative_to(core)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in (core / "src").rglob("*.java")}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--module", choices=("seats", "platform"), default="seats")
     args = parser.parse_args()
+    core = ROOT / "services" / args.module
+    package = Path("src/main/java/io/campusflow") / args.module
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    original = source_hashes()
+    original = source_hashes(core)
     results = []
-    for name, filename, before, after, expected_test, test_selector in MUTATIONS:
+    for name, filename, before, after, expected_test, test_selector in (MUTATIONS if args.module == "seats" else PLATFORM_MUTATIONS):
         with tempfile.TemporaryDirectory(prefix="campusflow-m1-mutation-") as directory:
-            copy = Path(directory) / "seats"
-            shutil.copytree(CORE, copy, ignore=shutil.ignore_patterns("target"))
-            source = copy / PACKAGE / filename
+            copy = Path(directory) / args.module
+            shutil.copytree(core, copy, ignore=shutil.ignore_patterns("target"))
+            source = copy / package / filename
             text = source.read_text(encoding="utf-8")
             if text.count(before) != 1:
                 raise RuntimeError(f"Mutation target changed: {name}; review the experiment")
@@ -79,9 +107,9 @@ def main():
                 raise RuntimeError(f"{name}: expected behavioral failure absent; inspect its log")
             results.append({"mutation": name, "exit_code": run.returncode,
                             "failed_tests": failed_tests, "errors": errors})
-    if source_hashes() != original:
+    if source_hashes(core) != original:
         raise RuntimeError("Original source changed during the experiment")
-    summary = {"results": results, "original_source_unchanged": True}
+    summary = {"module": args.module, "results": results, "original_source_unchanged": True}
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary))
 
