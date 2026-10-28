@@ -14,6 +14,7 @@ M1-A 负责人：`leafwhisper286`；M1-B 同学账号、模块总负责人及实
 - [核心规则实际验证](../../docs/process/m1-core-validation.md)
 - [预约存储设计](../../docs/architecture/m1-storage.md) · [存储与事务锁实际验证](../../docs/process/m1-storage-validation.md)
 - [内部查询方案](../../docs/architecture/m1-availability-plan.md) · [查询与80测试验证/人工复验步骤](../../docs/process/m1-availability-validation.md)
+- [D补充/权限与插座验证](../../docs/process/m1-d-supplement-validation.md) · [各负责人接入说明书](../../docs/handoffs/m1-integration.md)
 
 配置好Java21后，在仓库根目录运行：
 
@@ -21,4 +22,4 @@ M1-A 负责人：`leafwhisper286`；M1-B 同学账号、模块总负责人及实
 ./services/platform/mvnw -B -f services/seats/pom.xml verify
 ```
 
-当前复用仓库已有Maven Wrapper；该命令构建seats并启动独立临时PostgreSQL测试，不启动或修改D。迁移由Flyway管理在m1 schema内；测试不能用root运行。当前共80测试（原有43、新增37）。开放计算已实现；真实D授权范围/资源适配、最终提交的完整条件校验、M2/M3占用、管理界面配置及状态转换尚未完成。
+当前复用仓库已有Maven Wrapper；该命令构建seats并启动独立临时PostgreSQL测试，不启动或修改D。迁移由Flyway管理在m1 schema内；测试不能用root运行。当前共86测试，包含开放/权限/院系范围/精确插座筛选；上轮80测试为历史验收阶段。真实D身份/资源网络适配、最终提交的完整条件校验、M2/M3占用、管理界面配置及状态转换尚未完成。

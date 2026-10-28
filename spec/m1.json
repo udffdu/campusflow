@@ -100,7 +100,26 @@
     {
       "owner": "D",
       "subject": "M1业务权限与角色、全校/院系访问范围、插座属性、主数据变更竞态、配置管理、通知渠道、服务凭据和CSRF",
-      "status": "pending"
+      "status": "three_supplements_implemented_under_user_authorization; other_boundaries_pending",
+      "proposal": "docs/process/m1-d-integration-review.md",
+      "repository_inspection": {
+        "checked_at": "2026-10-28",
+        "main_commit": "9c98d43265d3b8303dc982e72a5b69ee423cc057",
+        "existing_contract": "contracts/platform-api.md",
+        "pr_url": "https://github.com/udffdu/campusflow/pull/2",
+        "existing_base_contract_found": true,
+        "supplemental_m1_decisions_found": false,
+        "affected_owner_approval_recorded": false
+      },
+      "implementation_authority": "d_supplement_authorization",
+      "remaining_subjects": [
+        "真实网络身份/主数据适配",
+        "主数据变更在途/已有预约边界",
+        "午夜开放表示",
+        "M1路由和CSRF",
+        "配置归属",
+        "最终通知渠道"
+      ]
     },
     {
       "owner": "M2",
@@ -120,11 +139,14 @@
     "storage_design": "docs/architecture/m1-storage.md",
     "storage_validation": "docs/process/m1-storage-validation.md",
     "availability_plan": "docs/architecture/m1-availability-plan.md",
-    "availability_validation": "docs/process/m1-availability-validation.md"
+    "availability_validation": "docs/process/m1-availability-validation.md",
+    "d_integration_review": "docs/process/m1-d-integration-review.md",
+    "integration_handoff": "docs/handoffs/m1-integration.md",
+    "d_supplement_validation": "docs/process/m1-d-supplement-validation.md"
   },
   "delivery": {
     "implemented": false,
-    "human_acceptance": "core_store_and_internal_query_local_build_test_reproduced_by_user",
+    "human_acceptance": "core_store_query_and_d_supplements_local_build_test_reproduced; D corroborated_by_local_report",
     "peer_review": "not_performed; M1-B handoff deferred by user",
     "remote_ci": "not_run",
     "core_rules": "implemented_and_locally_tested",
@@ -182,11 +204,96 @@
       "record": "docs/process/m1-availability-validation.md",
       "pending": [
         "D身份和业务权限/访问范围/主数据适配",
-        "插座语义",
         "跨午夜开放表示",
         "M2/M3占用",
         "HTTP与页面",
         "创建时完整条件校验"
+      ],
+      "latest_followup": "delivery.d_supplements; original 80-test evidence retained for its historical stage"
+    },
+    "d_supplements": {
+      "status": "implemented_and_locally_tested",
+      "human_verification": {
+        "reported_by": "leafwhisper286",
+        "reported_on": "2026-10-28",
+        "seats": {
+          "tests": 86,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "build": "SUCCESS",
+          "reported_finished_at": "2026-10-28T16:05:32+08:00",
+          "maven_elapsed_seconds": 3.22,
+          "evidence": "用户提供终端输出"
+        },
+        "web": {
+          "test_files": 4,
+          "tests": 11,
+          "passed": 11,
+          "test_duration_ms": 365,
+          "typecheck": "passed",
+          "build": "passed",
+          "vite_build_ms": 82,
+          "evidence": "用户提供终端输出"
+        },
+        "platform_corroboration": {
+          "tests": 24,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "test_suite_seconds": 19.813,
+          "artifact_modified_at": "2026-10-28T16:05:27+08:00",
+          "artifact": "services/platform/target/surefire-reports/TEST-io.campusflow.platform.PlatformIntegrationTest.xml",
+          "evidence": "AI核对同次本地Surefire报告，原始报告不提交；用户消息未含D段日志",
+          "d_log_pasted_by_user": false
+        },
+        "source_review_completed": false,
+        "full_m1_acceptance": false,
+        "peer_review_completed": false,
+        "record": "docs/process/m1-d-supplement-validation.md"
+      },
+      "platform_tests": {
+        "total": 24,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "finished_at": "2026-10-28T15:16:47+08:00"
+      },
+      "seats_tests": {
+        "total": 86,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "finished_at": "2026-10-28T15:17:16+08:00"
+      },
+      "web_tests": {
+        "total": 11,
+        "passed": 11
+      },
+      "web_build": "passed",
+      "mutations": {
+        "seats": 9,
+        "platform": 3,
+        "all_detected": true,
+        "errors": 0,
+        "original_java_source_unchanged": true
+      },
+      "migration": "D V3; temporary PostgreSQL blank/V2-upgrade/replay verified; not deployed",
+      "full_http_or_network_integration": false,
+      "record": "docs/process/m1-d-supplement-validation.md",
+      "local_code_commits": [
+        {
+          "commit": "21ac46b",
+          "scope": "D permissions, metadata, V3 migration and integration tests"
+        },
+        {
+          "commit": "40f3ba0",
+          "scope": "resource and role UI; component tests"
+        },
+        {
+          "commit": "0322b01",
+          "scope": "M1 permission/scope/outlet rules and isolated mutation checks"
+        }
       ]
     }
   },
@@ -197,5 +304,20 @@
     "confirmed_at": "2026-10-28",
     "evidence": "用户回复：我同意",
     "affected_d_m2_m3_review_replaced": false
+  },
+  "d_supplement_authorization": {
+    "recorded_at": "2026-10-28",
+    "authorized_by": "leafwhisper286",
+    "evidence": "补充内容你直接增加即可，只需要在最后生成一份说明书告知其他部分的负责人。",
+    "scope": [
+      "三项个人预约权限和SEAT_USER",
+      "ROOM.bookingScope",
+      "SEAT.features的POWER_OUTLET",
+      "相关D迁移/API/管理界面和M1内部规则"
+    ],
+    "prior_d_review_required_for_these_supplements": false,
+    "d_personally_approved": false,
+    "other_owner_handoff": "document_for_user_to_forward_after_completion",
+    "other_pending_policies_approved": false
   }
 }

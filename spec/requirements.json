@@ -1,6 +1,6 @@
 {
   "register_status": "partial_draft",
-  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004部分实现，个人预约PG存储、事务锁、幂等及内部开放/个人占用查询已有本地验证；真实鉴权、完整可用性与M2/M3集成等仍未完成。M1-B交接按用户要求延后至A完成。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
+  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/012部分实现，存储/锁/幂等、内部查询和用户授权的D权限/范围/插座补充已有本地验证；真实网络鉴权、完整可用性与M2/M3集成等仍未完成。M1-B和三项补充的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
   "requirements": [
     {
       "id": "CF-M2-001",
@@ -281,13 +281,16 @@
       "implementation": [
         "services/seats/src/main/java/io/campusflow/seats/SeatAvailabilityQuery.java",
         "services/seats/src/main/java/io/campusflow/seats/OpeningSchedule.java",
-        "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java"
+        "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationAccessPolicy.java"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/SeatAvailabilityQueryTest.java",
         "services/seats/src/test/java/io/campusflow/seats/OpeningScheduleTest.java",
         "scripts/check_m1_core_mutations.py",
-        "docs/process/m1-availability-validation.md"
+        "docs/process/m1-availability-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/ReservationAccessPolicyTest.java",
+        "docs/process/m1-d-supplement-validation.md"
       ]
     },
     {
@@ -467,7 +470,7 @@
       "module": "M1",
       "title": "配置和公共层能力对接",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "responsibility": "A/B/D",
       "acceptance": [
         "管理员可通过已评审的配置管理方式调整预约窗口和单次时长，更新后行为与参数一致",
@@ -475,8 +478,19 @@
         "全校/院系访问范围、插座表达、资源停用生效边界和配置归属经A/B/D评审后验证",
         "提醒渠道明确验收方式，不将目前只有站内信的D能力直接宣称为外部邮件/微信推送已交付"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/platform/src/main/resources/db/migration/V3__seat_booking_metadata.sql",
+        "services/platform/src/main/java/io/campusflow/platform/ResourceService.java",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationAccessPolicy.java",
+        "apps/web/src/views/ResourcesView.vue",
+        "contracts/platform-api.md"
+      ],
+      "verification": [
+        "services/platform/src/test/java/io/campusflow/platform/PlatformIntegrationTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/ReservationAccessPolicyTest.java",
+        "apps/web/src/components/ResourcesView.test.ts",
+        "docs/process/m1-d-supplement-validation.md"
+      ]
     }
   ]
 }
