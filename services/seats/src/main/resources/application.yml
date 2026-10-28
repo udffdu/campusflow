@@ -1,0 +1,27 @@
+server:
+  address: ${M1_ADDRESS:127.0.0.1}
+  port: ${M1_PORT:8081}
+  error:
+    include-message: never
+    include-stacktrace: never
+spring:
+  application:
+    name: campusflow-seats
+  datasource:
+    url: ${M1_DATABASE_URL}
+    username: ${M1_DATABASE_USER}
+    password: ${M1_DATABASE_PASSWORD:}
+    hikari:
+      connection-timeout: 2000
+  flyway:
+    schemas: m1
+    default-schema: m1
+m1:
+  d-base-url: ${M1_D_BASE_URL}
+  service-key: ${M1_SERVICE_KEY}
+  max-advance: ${M1_MAX_ADVANCE}
+  max-duration: ${M1_MAX_DURATION}
+  connect-timeout: ${M1_CONNECT_TIMEOUT:PT1S}
+  read-timeout: ${M1_READ_TIMEOUT:PT2S}
+  call-budget: ${M1_CALL_BUDGET:PT3S}
+  max-pages: ${M1_MAX_PAGES:100}
