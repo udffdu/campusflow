@@ -10,6 +10,8 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
@@ -127,6 +129,26 @@ public final class ReservationStore {
     public Optional<ReservationRecord> findForRequest(UUID userId,String key) {
         return jdbc.query("select r.* from m1.reservations r join m1.reservation_requests q on r.id=q.reservation_id "
                 +"where q.user_id=? and q.idempotency_key=? and r.user_id=?",ReservationStore::map,userId,key,userId).stream().findFirst();
+    }
+
+    public record HistoryPosition(Instant createdAt, UUID id) {
+        public HistoryPosition { Objects.requireNonNull(createdAt); Objects.requireNonNull(id); }
+    }
+    public record OwnHistory(List<ReservationRecord> items, HistoryPosition next) {}
+
+    /** Keyset pagination over the authenticated user's rows, including every lifecycle state. Never writes. */
+    public OwnHistory historyForUser(UUID userId, HistoryPosition before, int size) {
+        Objects.requireNonNull(userId);
+        if(size<1||size>50)throw new IllegalArgumentException("History size must be 1..50");
+        var args=new java.util.ArrayList<Object>();args.add(userId);
+        String boundary="";
+        if(before!=null){boundary=" and (created_at,id) < (?,?)";args.add(Timestamp.from(before.createdAt()));args.add(before.id());}
+        args.add(size+1);
+        var rows=jdbc.query("select * from m1.reservations where user_id=?"+boundary+" order by created_at desc,id desc limit ?",
+                ReservationStore::map,args.toArray());
+        boolean more=rows.size()>size;var items=List.copyOf(rows.subList(0,Math.min(size,rows.size())));
+        var last=items.isEmpty()?null:items.getLast();
+        return new OwnHistory(items,more?new HistoryPosition(last.createdAt(),last.id()):null);
     }
 
     /**

@@ -204,4 +204,47 @@ class QueryHttpTest {
         assertEquals(404,get("/api/m1/v1/csrf",true).statusCode());counts(0);
     }
 
+    @Test void ownHistoryPaginatesWithoutForeignRowsOrWrites()throws Exception {
+        var store=app.getBean(ReservationStore.class);
+        var first=store.create(new CreateReservation(user,room,seat,period(),1),"history-one");
+        store.create(new CreateReservation(other,room,other,period(),1),"history-foreign");
+        var later=new TimeRange(period().endAt(),period().endAt().plusSeconds(3600));
+        var second=store.create(new CreateReservation(user,room,seat,later,1),"history-two");
+        var a=body(get("/api/m1/v1/reservations?size=1",true));assertEquals(1,a.path("items").size());assertFalse(a.path("nextCursor").asText().isEmpty());
+        var b=body(get("/api/m1/v1/reservations?size=1&cursor="+a.path("nextCursor").asText(),true));
+        assertEquals(Set.of(first.id().toString(),second.id().toString()),Set.of(a.path("items").get(0).path("id").asText(),b.path("items").get(0).path("id").asText()));
+        assertEquals("",b.path("nextCursor").asText());counts(3);
+    }
+    @ParameterizedTest @ValueSource(strings={"size=0","size=51","size=-1","size=1&size=2","userId=forged","cursor=","cursor=bad","page=1"})
+    void historyRejectsUntrustedPagingParameters(String params)throws Exception {assertEquals(400,get("/api/m1/v1/reservations?"+params,true).statusCode());counts(0);}
+    @Test void historyRequiresReadOwnPermissionOnEachCall()throws Exception {
+        assertEquals(401,get("/api/m1/v1/reservations",false).statusCode());
+        assertEquals(200,get("/api/m1/v1/reservations",true).statusCode());
+        responder=e->new Reply(identity(false,Set.of(DQueryClient.PERMISSION,"seats.reservations.create")));
+        assertEquals(403,get("/api/m1/v1/reservations",true).statusCode());counts(0);
+    }
+    @Test void repeatContextRequiresOwnerAndReturnsCurrentResourcesWithoutOldTimes()throws Exception {
+        var store=app.getBean(ReservationStore.class);
+        var own=store.create(new CreateReservation(user,room,seat,period(),1),"context-own");
+        var foreign=store.create(new CreateReservation(other,room,other,period(),1),"context-foreign");
+        var response=get("/api/m1/v1/reservations/"+own.id()+"/repeat-context",true);assertEquals(200,response.statusCode(),response.body());
+        var value=body(response);assertEquals(room.toString(),value.path("room").path("id").asText());assertEquals(seat.toString(),value.path("seat").path("id").asText());
+        assertTrue(value.path("requiresNewTime").asBoolean());assertFalse(value.has("startAt"));assertFalse(value.has("endAt"));assertFalse(value.path("canReserve").asBoolean(true));
+        calls.clear();assertEquals(404,get("/api/m1/v1/reservations/"+foreign.id()+"/repeat-context",true).statusCode());assertEquals(1,calls.size());counts(2);
+    }
+    @Test void repeatContextRechecksCurrentScopeDisableAndQueryPermission()throws Exception {
+        var own=app.getBean(ReservationStore.class).create(new CreateReservation(user,room,seat,period(),1),"context-changes");String path="/api/m1/v1/reservations/"+own.id()+"/repeat-context";
+        responder=e->e.getRequestURI().getPath().endsWith(room.toString())?new Reply(resource(room,"ROOM",dept,"DEPARTMENT",Set.of(),false)):normal(e);
+        assertEquals(409,get(path,true).statusCode());
+        responder=e->e.getRequestURI().getPath().endsWith(room.toString())?new Reply(resource(room,"ROOM",other,"DEPARTMENT",Set.of(),true)):normal(e);
+        assertEquals(403,get(path,true).statusCode());
+        responder=e->{if(!e.getRequestURI().getPath().endsWith("authorization"))return normal(e);try{var input=json.readTree(e.getRequestBody());boolean read=input.path("permission").asText().equals("seats.reservations.read.own");return new Reply(identity(read,Set.of("seats.reservations.read.own")));}catch(Exception ex){throw new RuntimeException(ex);}};
+        assertEquals(403,get(path,true).statusCode());assertEquals(200,get("/api/m1/v1/reservations",true).statusCode());counts(1);
+    }
+    @Test void historyAndRepeatUpstreamFailureNeverLookLikeEmptySuccess()throws Exception {
+        responder=e->new Reply(503,Map.of(),0);
+        assertEquals(503,get("/api/m1/v1/reservations",true).statusCode());
+        assertEquals(503,get("/api/m1/v1/reservations/"+UUID.randomUUID()+"/repeat-context",true).statusCode());counts(0);
+    }
+
 }

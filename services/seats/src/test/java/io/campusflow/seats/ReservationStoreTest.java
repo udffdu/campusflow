@@ -121,6 +121,41 @@ class ReservationStoreTest {
         assertTrue(store.findForUser(user, UUID.randomUUID()).isEmpty());
     }
 
+    @Test void historyIsOwnerScopedAndIncludesAllStatesWithStableTies() {
+        var records=new java.util.ArrayList<ReservationRecord>();int i=0;
+        for(var state:ReservationStatus.values()){
+            var start=request().period().startAt().plusSeconds(3600L*i++);
+            var r=store.create(new CreateReservation(user,room,UUID.randomUUID(),new TimeRange(start,start.plusSeconds(3600)),1),"history-"+i);
+            jdbc.update("update m1.reservations set status=? where id=?",state.name(),r.id());records.add(r);
+        }
+        store.create(new CreateReservation(UUID.randomUUID(),room,UUID.randomUUID(),request().period(),1),"foreign-history");
+        var first=store.historyForUser(user,null,2);assertEquals(2,first.items().size());assertNotNull(first.next());
+        var second=store.historyForUser(user,first.next(),2);var third=store.historyForUser(user,second.next(),2);
+        var actual=new java.util.ArrayList<ReservationRecord>();actual.addAll(first.items());actual.addAll(second.items());actual.addAll(third.items());
+        assertEquals(records.stream().map(r->r.id().toString()).sorted(java.util.Comparator.reverseOrder()).toList(),actual.stream().map(r->r.id().toString()).toList());
+        assertEquals(java.util.Set.of(ReservationStatus.values()),actual.stream().map(ReservationRecord::status).collect(java.util.stream.Collectors.toSet()));
+        assertTrue(actual.stream().allMatch(r->r.userId().equals(user)));assertNull(third.next());assertCounts(6,6,6);
+    }
+
+    @Test void historyCursorDoesNotRepeatRowsAfterNewInsertion() {
+        var first=store.create(request(),"history-old");
+        var page=store.historyForUser(user,null,1);assertEquals(first.id(),page.items().getFirst().id());assertNull(page.next());
+        var newer=store(Clock.offset(CLOCK,Duration.ofSeconds(1)),Duration.ofSeconds(2));
+        var nextPeriod=new TimeRange(request().period().endAt(),request().period().endAt().plusSeconds(3600));
+        var second=newer.create(new CreateReservation(user,room,seat,nextPeriod,1),"history-new");
+        var top=store.historyForUser(user,null,1);assertEquals(second.id(),top.items().getFirst().id());
+        var latest=store(Clock.offset(CLOCK,Duration.ofSeconds(2)),Duration.ofSeconds(2));
+        latest.create(new CreateReservation(user,room,seat,new TimeRange(nextPeriod.endAt(),nextPeriod.endAt().plusSeconds(3600)),1),"history-latest");
+        var tail=store.historyForUser(user,top.next(),1);assertEquals(first.id(),tail.items().getFirst().id());assertNull(tail.next());
+        assertEquals(3,store.historyForUser(user,null,20).items().size());assertCounts(3,3,3);
+    }
+
+    @Test void historyEmptyAndInvalidLimitsNeverWrite() {
+        assertTrue(store.historyForUser(user,null,20).items().isEmpty());
+        assertThrows(IllegalArgumentException.class,()->store.historyForUser(user,null,0));
+        assertThrows(IllegalArgumentException.class,()->store.historyForUser(user,null,51));assertCounts(0,0,0);
+    }
+
     @Test void overlappingSeatIsRejected() {
         store.create(request(), "seat-first");
         var other = new CreateReservation(UUID.randomUUID(), room, seat, request().period(), 7);
