@@ -13,3 +13,5 @@ export async function refreshUnread() {
   if (!session.user) return
   const result = await api<{count:number}>('/notifications/unread'); session.unread = result.count
 }
+
+export function landingPath() { return can('seats.availability.read') && !can('spaces.read') ? '/seat-query' : '/' }

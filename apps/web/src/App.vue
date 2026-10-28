@@ -10,6 +10,7 @@ const route = useRoute(); const router = useRouter(); const menuOpen = ref(false
 const passwordOpen = ref(false); const currentPassword = ref(''); const newPassword = ref(''); const error = ref(''); const busy = ref(false)
 const navigation = computed(() => [
   {path:'/',name:'工作台',icon:'grid',show:true}, {path:'/resources',name:'空间资源',icon:'space',show:can('spaces.read')},
+  {path:'/seat-query',name:'座位查询',icon:'chair',show:can('seats.availability.read')},
   {path:'/notifications',name:'通知中心',icon:'bell',show:true},
   {path:'/users',name:'账号与权限',icon:'users',show:can('users.manage')},
   {path:'/deliveries',name:'通知投递',icon:'send',show:can('notifications.manage')},

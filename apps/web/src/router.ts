@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { can, loadSession, session } from './session'
+import { can, landingPath, loadSession, session } from './session'
+import SeatQueryView from './views/SeatQueryView.vue'
 import LoginView from './views/LoginView.vue'
 import OverviewView from './views/OverviewView.vue'
 import ResourcesView from './views/ResourcesView.vue'
@@ -11,6 +12,7 @@ import NotFoundView from './views/NotFoundView.vue'
 export const router = createRouter({ history: createWebHistory(), routes: [
   {path:'/login', component:LoginView, meta:{title:'登录'}},
   {path:'/', component:OverviewView, meta:{title:'工作台'}},
+  {path:'/seat-query',component:SeatQueryView,meta:{title:'座位查询',permission:'seats.availability.read'}},
   {path:'/resources', component:ResourcesView, meta:{title:'空间资源',permission:'spaces.read'}},
   {path:'/users', component:UsersView, meta:{title:'账号与权限',permission:'users.manage'}},
   {path:'/notifications', component:NotificationsView, meta:{title:'通知中心'}},
@@ -22,7 +24,7 @@ export const router = createRouter({ history: createWebHistory(), routes: [
 router.beforeEach(async to => {
   if (!session.ready) { try { await loadSession() } catch { if (to.path !== '/login') return '/login' } }
   if (!session.user && to.path !== '/login') return '/login'
-  if (session.user && to.path === '/login') return '/'
+  if (session.user && to.path === '/login') return landingPath()
   if (to.meta.permission && !can(String(to.meta.permission))) return '/forbidden'
 })
 router.afterEach(to => { document.title = `${to.meta.title ?? 'CampusFlow'} · CampusFlow` })
