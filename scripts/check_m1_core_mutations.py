@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Confirm core and database-lock tests detect broken logic in disposable source copies."""
+"""Confirm time, lock and partial availability tests detect broken disposable source copies."""
 
 import argparse
 import hashlib
@@ -27,6 +27,17 @@ MUTATIONS = [
      "/* deliberately omitted transaction lock acquisition */",
      "heldRoomLockCausesRetryableFailureAndNoWrites",
      "ReservationStoreTest#heldRoomLockCausesRetryableFailureAndNoWrites"),
+    ("missing_opening_filter", "SeatAvailabilityQuery.java",
+     "if (!room.openingHours().covers(period))", "if (false)",
+     "entirePeriodMustBeOpen", "SeatAvailabilityQueryTest#entirePeriodMustBeOpen"),
+    ("missing_occupied_seat_filter", "SeatAvailabilityQuery.java",
+     ".filter(seat -> !occupancy.occupiedSeatIds().contains(seat.id()))", ".filter(seat -> true)",
+     "bookingAfterQueryChangesNextQueryWithoutReservingOnRead",
+     "SeatAvailabilityQueryTest#bookingAfterQueryChangesNextQueryWithoutReservingOnRead"),
+    ("missing_user_query_conflict", "SeatAvailabilityQuery.java",
+     "if (occupancy.userConflict())", "if (false)",
+     "ownOverlapInAnotherRoomReturnsExplicitConflict",
+     "SeatAvailabilityQueryTest#ownOverlapInAnotherRoomReturnsExplicitConflict"),
 ]
 
 

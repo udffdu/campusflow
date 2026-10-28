@@ -13,7 +13,9 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -108,6 +110,38 @@ public final class ReservationStore {
         return jdbc.query("select * from m1.reservations where user_id=? and id=?", ReservationStore::map,
                 userId, reservationId).stream().findFirst();
     }
+
+    /**
+     * Read-only M1 personal occupancy, one SQL statement/snapshot. The caller must authenticate userId.
+     * No D, M2 or M3 guarantees; this read does not reserve seats or acquire transaction locks.
+     */
+    public PersonalOccupancy personalOccupancy(UUID userId, UUID roomId, TimeRange period) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(roomId, "roomId");
+        Objects.requireNonNull(period, "period");
+        try {
+            var facts = jdbc.query("""
+                    select user_id=? as user_conflict, case when room_id=? then seat_id end as occupied_seat
+                    from m1.reservations
+                    where (user_id=? or room_id=?) and status in ('CONFIRMED','CHECKED_IN')
+                      and start_at < ? and end_at > ?
+                    """, (row, index) -> new OccupancyFact(row.getBoolean("user_conflict"),
+                            row.getObject("occupied_seat", UUID.class)),
+                    userId, roomId, userId, roomId, Timestamp.from(period.endAt()), Timestamp.from(period.startAt()));
+            return new PersonalOccupancy(facts.stream().anyMatch(OccupancyFact::userConflict),
+                    facts.stream().map(OccupancyFact::seatId).filter(Objects::nonNull).collect(Collectors.toSet()));
+        } catch (DataAccessException exception) {
+            throw new ReservationPersistenceException(STORAGE_UNAVAILABLE, exception);
+        }
+    }
+
+    public record PersonalOccupancy(boolean userConflict, Set<UUID> occupiedSeatIds) {
+        public PersonalOccupancy {
+            occupiedSeatIds = Set.copyOf(occupiedSeatIds);
+        }
+    }
+
+    private record OccupancyFact(boolean userConflict, UUID seatId) {}
 
     private boolean conflicts(String field, UUID value, TimeRange period) {
         if (!field.equals("user_id") && !field.equals("seat_id")) throw new IllegalArgumentException("Invalid field");
