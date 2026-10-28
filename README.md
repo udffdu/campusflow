@@ -74,15 +74,17 @@ npm run dev
 
 M1已有独立只读HTTP与座位查询页，尚不开放预约提交。Java21/Node就绪后，在仓库根运行`bash scripts/check-m1-http.sh`复验，`bash scripts/start-m1-http-demo.sh`启动独立18080/18081/5174环境；密码在终端临时设置，账号student。不会替换原D演示。详情和人工验收步骤见 [HTTP验证记录](docs/process/m1-http-query-validation.md) 与 [API契约](contracts/m1-query-api.md)。
 
-## M1-A 个人预约隔离演示
+## M1-A 普通个人预约与旧演示
 
 普通应用个人预约入口已新增：`/seat-reservations`，可通过明确安全配置在生产jar启用个人提交；默认关闭写入。当前按用户选择自然日窗口，M2整室/维修尚未接入，尚非全系统放行。复验`bash scripts/check-m1-personal.sh`；预览`bash scripts/start-m1-personal-preview.sh`，使用[::1]:5374隔离旧演示会话。详见[普通入口配置/API](contracts/m1-personal-api.md)和[验证/人工步骤](docs/process/m1-personal-runtime-validation.md)。
 
-使用`bash scripts/check-m1-submit.sh`复验，`bash scripts/start-m1-reservation-demo.sh`启动独立18180/18181/5274环境。浏览器用localhost:5274，账号student、终端临时密码；本轮只演示个人预约，未包含M2整教室/维修限制，生产入口仍关闭。见[分工边界](docs/requirements/m1-a-boundary.md)和[验证/操作步骤](docs/process/m1-reservation-submit-validation.md)。
+以下为旧隔离演示入口，其写入关闭描述仅指当时/对应配置；当前普通入口以上文为准。使用`bash scripts/check-m1-submit.sh`复验，`bash scripts/start-m1-reservation-demo.sh`启动独立18180/18181/5274环境。浏览器用localhost:5274，账号student、终端临时密码；本轮只演示个人预约，未包含M2整教室/维修限制，生产入口仍关闭。见[分工边界](docs/requirements/m1-a-boundary.md)和[验证/操作步骤](docs/process/m1-reservation-submit-validation.md)。
 
-本人历史/再次预约新增`/my-reservations`，复用原座位后必须重新填写时段并重新验证，正式写入口继续关闭。运行`bash scripts/check-m1-history.sh`复验本轮157后端/46前端/28只读及48提交网络检查；旧Java演示需按步骤重启才能加载新接口，临时数据库会清理，已加载新版的当前演示无需重复重启。脚本、指定页面观察及日期＋整点下拉已获用户确认，详见[历史验证与人工操作](docs/process/m1-history-validation.md)及[接口契约](contracts/m1-history-api.md)。
+本人历史/再次预约位于`/my-reservations`，复用原座位后必须重新填写时段并重新验证；普通环境可按上述配置新建，旧演示保持独立。运行`bash scripts/check-m1-history.sh`复验本轮157后端/46前端/28只读及48提交网络检查；旧Java演示需按步骤重启才能加载新接口，临时数据库会清理，已加载新版的当前演示无需重复重启。脚本、指定页面观察及日期＋整点下拉已获用户确认，详见[历史验证与人工操作](docs/process/m1-history-validation.md)及[接口契约](contracts/m1-history-api.md)。
 
 ## 关键文档
+
+- [M1-A阶段交付与文档索引](docs/handoffs/m1-a-delivery.md) · [续做手册](docs/handoffs/m1-a-resume.md)（当前状态、按负责人交接、延期项及上传安排）
 
 - [架构决策：单仓库与服务边界](docs/architecture/adr-0001-repository-and-services.md)
 - [M2 需求与待决规则](docs/requirements/m2.md)
