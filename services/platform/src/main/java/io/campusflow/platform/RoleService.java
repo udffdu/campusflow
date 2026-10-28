@@ -20,7 +20,7 @@ public class RoleService {
         return new Department(id,input.code(),input.name());
     }
     @Transactional public Role write(RoleWrite input,boolean create,Identity actor,String requestId) {
-        if(Set.of("ADMIN","SPACE_MANAGER","AUDITOR","MEMBER").contains(input.code())) throw ApiException.bad("BUILTIN_ROLE","内置角色受保护，请新建自定义角色");
+        if(Set.of("ADMIN","SPACE_MANAGER","AUDITOR","MEMBER","SEAT_USER").contains(input.code())) throw ApiException.bad("BUILTIN_ROLE","内置角色受保护，请新建自定义角色");
         var allowed=new HashSet<>(db.queryForList("select code from permission_catalog where not global_only",String.class));
         if(!allowed.containsAll(input.permissions())) throw ApiException.bad("PERMISSION","权限不存在，或仅允许授予内置系统管理员");
         if(create) db.update("insert into roles(code,name) values(?,?)",input.code(),input.name());

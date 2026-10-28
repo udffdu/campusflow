@@ -226,7 +226,7 @@ class PlatformIntegrationTest {
         assertThatThrownBy(()->db.update("delete from audit_events where id=?",UUID.fromString(id))).isInstanceOf(DataAccessException.class);
     }
     @Test void migrationsCanReplayWithoutChangingAppliedHistory() {
-        assertThat(flyway.info().applied()).hasSize(2);assertThat(flyway.migrate().migrationsExecuted).isZero();
+        assertThat(flyway.info().applied()).hasSize(3);assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
     @Test void customRolesCannotGrantGlobalPrivilegesAndChangesAreImmediate() throws Exception {
         json(post("/api/v1/roles"),new RoleWrite("LIBRARIAN","图书馆空间维护",Set.of("spaces.read","spaces.write")),admin).andExpect(status().isCreated());
@@ -236,5 +236,115 @@ class PlatformIntegrationTest {
         assertThat(identities.findSession(user.getValue()).orElseThrow().permissions()).doesNotContain("spaces.write");
         json(post("/api/v1/roles"),new RoleWrite("ESCALATED","越权角色",Set.of("users.manage")),admin).andExpect(status().isBadRequest());
         json(put("/api/v1/roles/ADMIN"),new RoleWrite("ADMIN","override",Set.of("spaces.read")),admin).andExpect(status().isBadRequest());
+    }
+
+    @Test void seatPermissionsRequireExplicitAssignmentAndApplyToExistingSessions() throws Exception {
+        UUID id=seed("seat-member",EIE,"MEMBER");Cookie user=login("seat-member");
+        var permissions=List.of("seats.availability.read","seats.reservations.create","seats.reservations.read.own");
+        for(String permission:permissions) {
+            internal("/authorization",Map.of("sessionToken",user.getValue(),"permission",permission),M1)
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+            internal("/authorization",Map.of("sessionToken",admin.getValue(),"permission",permission),M1)
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+        }
+        json(put("/api/v1/users/"+id),new UserUpdate("seat-member",EIE,Set.of("MEMBER","SEAT_USER"),true),admin)
+                .andExpect(status().isOk());
+        for(String permission:permissions) {
+            internal("/authorization",Map.of("sessionToken",user.getValue(),"permission",permission),M1)
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(true));
+        }
+        assertThat(identities.findSession(user.getValue()).orElseThrow().permissions()).doesNotContain("spaces.write");
+        json(put("/api/v1/users/"+id),new UserUpdate("seat-member",EIE,Set.of("MEMBER"),true),admin).andExpect(status().isOk());
+        internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.reservations.create"),M1)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+    }
+
+    @Test void seatRoleIsProtectedAndCustomRolesCanSelectRegisteredSeatPermissions() throws Exception {
+        json(put("/api/v1/roles/SEAT_USER"),new RoleWrite("SEAT_USER","override",Set.of("spaces.write")),admin)
+                .andExpect(status().isBadRequest());
+        json(post("/api/v1/roles"),new RoleWrite("SEAT_READER","预约只读",Set.of("seats.reservations.read.own")),admin)
+                .andExpect(status().isCreated());
+        seed("seat-reader",EIE,"SEAT_READER");Cookie user=login("seat-reader");
+        internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.reservations.read.own"),M1)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(true));
+        internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.reservations.create"),M1)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+    }
+
+    @Test void roomScopeSurvivesLegacyUpdatesAndIsVisibleThroughInternalApi() throws Exception {
+        var nodes=hierarchy(EIE);var room=nodes[2];String path="/api/v1/resources/"+room.get("id").asText();
+        assertThat(room.get("bookingScope").asText()).isEqualTo("DEPARTMENT");
+        var body=new LinkedHashMap<>(update(room,true));body.put("bookingScope","CAMPUS");
+        var campus=node(json(put(path),body,admin).andExpect(status().isOk()));
+        assertThat(campus.get("version").asLong()).isGreaterThan(room.get("version").asLong());
+        assertThat(campus.get("departmentId").asText()).isEqualTo(EIE.toString());
+        var legacy=node(json(put(path),update(campus,true),admin).andExpect(status().isOk()));
+        assertThat(legacy.get("bookingScope").asText()).isEqualTo("CAMPUS");
+        var explicitNull=new LinkedHashMap<>(update(legacy,true));explicitNull.put("bookingScope",null);
+        json(put(path),explicitNull,admin).andExpect(status().isOk()).andExpect(jsonPath("$.bookingScope").value("CAMPUS"));
+        json(put(path),body,admin).andExpect(status().isConflict());
+        mvc.perform(get("/internal/v1/resources/"+room.get("id").asText()).header("Authorization","Bearer "+M1))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.bookingScope").value("CAMPUS"));
+        seed("scope-manager",SCI,"SPACE_MANAGER");Cookie manager=login("scope-manager");
+        json(put(path),update(legacy,true),manager).andExpect(status().isForbidden());
+    }
+
+    @Test void roomScopeCanBeChosenOnCreateAndRejectsWrongResourceTypes() throws Exception {
+        var nodes=hierarchy(EIE);
+        var body=resource("ROOM",nodes[1].get("id").asText(),EIE);body.put("bookingScope","CAMPUS");
+        assertThat(create(body,admin).get("bookingScope").asText()).isEqualTo("CAMPUS");
+        body.put("bookingScope","UNKNOWN");json(post("/api/v1/resources"),body,admin).andExpect(status().isBadRequest());
+        var seat=resource("SEAT",nodes[2].get("id").asText(),EIE);seat.put("bookingScope","DEPARTMENT");
+        json(post("/api/v1/resources"),seat,admin).andExpect(status().isBadRequest());
+        var updateBuilding=new LinkedHashMap<>(update(nodes[1],true));updateBuilding.put("bookingScope","CAMPUS");
+        json(put("/api/v1/resources/"+nodes[1].get("id").asText()),updateBuilding,admin).andExpect(status().isBadRequest());
+    }
+
+    @Test void legacyNullScopeIsConservativeAndDatabaseRejectsInvalidScopes() throws Exception {
+        var nodes=hierarchy(EIE);UUID id=UUID.fromString(nodes[2].get("id").asText());
+        db.update("update resources set booking_scope=null where id=?",id);
+        mvc.perform(get("/api/v1/resources/"+id).cookie(admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.bookingScope").value("DEPARTMENT"));
+        assertThatThrownBy(()->db.update("update resources set booking_scope='UNKNOWN' where id=?",id)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(()->db.update("update resources set booking_scope='CAMPUS' where id=?",
+                UUID.fromString(nodes[1].get("id").asText()))).isInstanceOf(DataAccessException.class);
+    }
+
+    @Test void powerOutletMarkerBelongsToIndividualSeatsAndRoundTrips() throws Exception {
+        var nodes=hierarchy(EIE);var seat=resource("SEAT",nodes[2].get("id").asText(),EIE);
+        seat.put("features",List.of("POWER_OUTLET","靠窗"));var created=create(seat,admin);
+        mvc.perform(get("/internal/v1/resources/"+created.get("id").asText()).header("Authorization","Bearer "+M1))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.features[0]").value("POWER_OUTLET"));
+        var room=new LinkedHashMap<>(update(nodes[2],true));room.put("features",List.of("POWER_OUTLET"));
+        json(put("/api/v1/resources/"+nodes[2].get("id").asText()),room,admin).andExpect(status().isBadRequest());
+        var changed=new LinkedHashMap<>(update(created,true));changed.put("features",List.of("靠窗"));
+        json(put("/api/v1/resources/"+created.get("id").asText()),changed,admin)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.features.length()").value(1));
+    }
+
+    @Test void v2DatabaseUpgradesWithoutGrantingRolesOrGuessingOutletLabels() {
+        String schema="upgrade_"+UUID.randomUUID().toString().replace("-","");
+        var dataSource=new org.postgresql.ds.PGSimpleDataSource();
+        dataSource.setURL(PG.getJdbcUrl("postgres","postgres"));dataSource.setCurrentSchema(schema);
+        try {
+            Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).target("2").load().migrate();
+            var legacy=new JdbcTemplate(dataSource);UUID campus=UUID.randomUUID(),building=UUID.randomUUID(),room=UUID.randomUUID(),seat=UUID.randomUUID(),user=UUID.randomUUID();
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity) values(?,'CAMPUS',null,'C','campus',null,0)",campus);
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity) values(?,'BUILDING',?,'B','building',null,0)",building,campus);
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity) values(?,'ROOM',?,'R','room',?,1)",room,building,EIE);
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity,features) values(?,'SEAT',?,'S','seat',?,1,'[\"电源\"]'::jsonb)",seat,room,EIE);
+            legacy.update("insert into app_users(id,username,display_name,password_hash,department_id) values(?,'legacy','legacy','unused-test-hash',?)",user,EIE);
+            legacy.update("insert into user_roles values(?,'MEMBER')",user);
+            long version=legacy.queryForObject("select version from resources where id=?",Long.class,room);
+            var upgraded=Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load();
+            assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgraded.migrate().migrationsExecuted).isZero();
+            assertThat(legacy.queryForObject("select booking_scope from resources where id=?",String.class,room)).isEqualTo("DEPARTMENT");
+            assertThat(legacy.queryForObject("select version from resources where id=?",Long.class,room)).isGreaterThan(version);
+            assertThat(legacy.queryForList("select role_code from user_roles where user_id=?",String.class,user)).containsExactly("MEMBER");
+            assertThat(legacy.queryForObject("select features::text from resources where id=?",String.class,seat)).isEqualTo("[\"电源\"]");
+            // An older D binary can still insert a room without knowing the new column.
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity) values(?,'ROOM',?,'OLD','old writer',?,1)",UUID.randomUUID(),building,EIE);
+        } finally { db.execute("drop schema if exists "+schema+" cascade"); }
     }
 }

@@ -23,7 +23,8 @@ public class ResourceService {
     private Resource map(ResultSet rs,int ignored) throws SQLException {
         try { return new Resource(rs.getObject("id",UUID.class),rs.getString("type"),rs.getObject("parent_id",UUID.class),rs.getString("code"),rs.getString("name"),rs.getObject("department_id",UUID.class),rs.getInt("capacity"),
             mapper.readValue(rs.getString("features"),new TypeReference<List<String>>(){}),mapper.readValue(rs.getString("opening_hours"),new TypeReference<List<OpeningHour>>(){}),
-            rs.getBoolean("active"),rs.getBoolean("effective_active"),rs.getLong("version"),rs.getTimestamp("updated_at").toInstant()); }
+            rs.getBoolean("active"),rs.getBoolean("effective_active"),rs.getLong("version"),rs.getTimestamp("updated_at").toInstant(),
+            bookingScope(rs.getString("type"),rs.getString("booking_scope")==null?null:BookingScope.valueOf(rs.getString("booking_scope")),null)); }
         catch(java.io.IOException ex) { throw new SQLException("Invalid stored resource configuration",ex); }
     }
     public Resource get(UUID id) { return db.query(SELECT+" where r.id=?",this::map,id).stream().findFirst().orElseThrow(ApiException::missing); }
@@ -36,7 +37,8 @@ public class ResourceService {
         args.add(size); args.add(page*size);
         return new Page<>(db.query(SELECT+where+" order by r.type,r.code,r.id limit ? offset ?",this::map,args.toArray()),page,size,total);
     }
-    private void validate(String type,int capacity,List<OpeningHour> hours) {
+    private void validate(String type,int capacity,List<OpeningHour> hours,List<String> features) {
+        if(!type.equals("SEAT")&&features.contains("POWER_OUTLET")) throw ApiException.bad("FEATURE","有插座标记只能设置在具体座位上");
         if(type.equals("SEAT")&&capacity!=1) throw ApiException.bad("CAPACITY","座位容量必须为 1");
         if(type.equals("ROOM")&&capacity<1) throw ApiException.bad("CAPACITY","教室容量至少为 1");
         if(!type.equals("ROOM")&&!hours.isEmpty()) throw ApiException.bad("OPENING_HOURS","每周开放时段只配置在教室上");
@@ -49,9 +51,18 @@ public class ResourceService {
             previous=hour;
         }
     }
+    private static BookingScope bookingScope(String type,BookingScope requested,BookingScope current) {
+        if(!type.equals("ROOM")) {
+            if(requested!=null) throw ApiException.bad("BOOKING_SCOPE","预约开放范围只能设置在教室上");
+            return null;
+        }
+        return requested!=null?requested:current!=null?current:BookingScope.DEPARTMENT;
+    }
+    private static String scopeValue(BookingScope scope) { return scope==null?null:scope.name(); }
     private String json(Object value) { try { return mapper.writeValueAsString(value); } catch(Exception ex) { throw new IllegalStateException(ex); } }
     @Transactional public Resource create(ResourceCreate input,Identity user,String requestId) {
-        validate(input.type(),input.capacity(),input.openingHours());
+        validate(input.type(),input.capacity(),input.openingHours(),input.features());
+        BookingScope scope=bookingScope(input.type(),input.bookingScope(),null);
         String parentType=switch(input.type()) { case "CAMPUS"->null; case "BUILDING"->"CAMPUS"; case "ROOM"->"BUILDING"; default->"ROOM"; };
         if(parentType==null) { if(input.parentId()!=null) throw ApiException.bad("PARENT","校区不能有父节点"); }
         else {
@@ -64,14 +75,15 @@ public class ResourceService {
         if(List.of("CAMPUS","BUILDING").contains(input.type())&&input.departmentId()!=null) throw ApiException.bad("DEPARTMENT","校区和楼栋不归属单个院系");
         if(List.of("ROOM","SEAT").contains(input.type())&&input.departmentId()==null) throw ApiException.bad("DEPARTMENT","教室和座位须指定院系");
         access.scope(user,input.departmentId()); UUID id=UUID.randomUUID();
-        db.update("insert into resources(id,type,parent_id,code,name,department_id,capacity,features,opening_hours,active) values(?,?,?,?,?,?,?,?::jsonb,?::jsonb,?)",
-            id,input.type(),input.parentId(),input.code(),input.name(),input.departmentId(),input.capacity(),json(input.features()),json(input.openingHours()),input.active());
+        db.update("insert into resources(id,type,parent_id,code,name,department_id,capacity,features,opening_hours,active,booking_scope) values(?,?,?,?,?,?,?,?::jsonb,?::jsonb,?,?)",
+            id,input.type(),input.parentId(),input.code(),input.name(),input.departmentId(),input.capacity(),json(input.features()),json(input.openingHours()),input.active(),scopeValue(scope));
         audit.local(user.id(),input.departmentId(),"SPACE.CREATE",input.type(),id.toString(),"SUCCESS",null,requestId); return get(id);
     }
     @Transactional public Resource update(UUID id,ResourceUpdate input,Identity user,String requestId) {
-        Resource before=get(id); access.scope(user,before.departmentId()); validate(before.type(),input.capacity(),input.openingHours());
-        int changed=db.update("update resources set name=?,capacity=?,features=?::jsonb,opening_hours=?::jsonb,active=?,version=nextval('resource_version'),updated_at=now() where id=? and version=?",
-            input.name(),input.capacity(),json(input.features()),json(input.openingHours()),input.active(),id,input.expectedVersion());
+        Resource before=get(id); access.scope(user,before.departmentId()); validate(before.type(),input.capacity(),input.openingHours(),input.features());
+        BookingScope scope=bookingScope(before.type(),input.bookingScope(),before.bookingScope());
+        int changed=db.update("update resources set name=?,capacity=?,features=?::jsonb,opening_hours=?::jsonb,active=?,booking_scope=?,version=nextval('resource_version'),updated_at=now() where id=? and version=?",
+            input.name(),input.capacity(),json(input.features()),json(input.openingHours()),input.active(),scopeValue(scope),id,input.expectedVersion());
         if(changed==0) throw ApiException.conflict("资源已被其他人修改，请刷新后再编辑");
         audit.local(user.id(),before.departmentId(),"SPACE.UPDATE",before.type(),id.toString(),"SUCCESS",null,requestId); return get(id);
     }
