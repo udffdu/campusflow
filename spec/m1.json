@@ -1,6 +1,6 @@
 {
   "module": "M1",
-  "updated_at": "2026-10-28",
+  "updated_at": "2026-10-29",
   "status": "review_draft",
   "workstreams": [
     {
@@ -40,7 +40,12 @@
       "value": 1,
       "unit": "day",
       "configurable": true,
-      "confirmed_at": "2026-10-27"
+      "confirmed_at": "2026-10-27",
+      "interpretation": "CALENDAR_DAYS",
+      "interpretation_confirmed_at": "2026-10-29",
+      "interpretation_statement": "按自然日：允许预约到明天结束前的时段",
+      "applies_to": "startAt local date in Asia/Shanghai; not earlier than now",
+      "latest_start_date_offset_days": 1
     },
     "user_overlap": {
       "overlapping_effective_reservations_allowed": false,
@@ -80,7 +85,7 @@
       "rolling": true,
       "applies_to": "startAt",
       "upper_bound_inclusive": true,
-      "status": "proposed"
+      "status": "historical rolling proposal superseded for ordinary application by user-confirmed CALENDAR_DAYS on 2026-10-29; legacy demos explicitly retain rolling"
     },
     "interval": "[startAt,endAt)",
     "timezone": "Asia/Shanghai",
@@ -576,6 +581,172 @@
     "implementation_commits": {
       "backend_and_network": "dbead3f",
       "web_history_repeat_and_hour_controls": "8a4748e"
+    }
+  },
+  "external_occupancy_stage": {
+    "status": "deferred_by_user; draft_rules_and_review_materials_retained",
+    "requirement": "CF-M1-005",
+    "plan": "docs/architecture/m1-external-occupancy-plan.md",
+    "started_at": "2026-10-29",
+    "scope": "M1 side only: source ledger, independent release, availability and atomic personal-create checks, authenticated internal receive/recovery",
+    "implementation_started": false,
+    "new_migration_written": false,
+    "production_write_release_approved": false,
+    "m2_m3_contracts_approved": false,
+    "other_owner_review": "pending; M2 dianashiba per four GitHub documents; user confirms M3 owner not yet determined",
+    "new_tests": "not_run; documentation only; previous passed source unchanged",
+    "unresolved": [
+      "M3 affected reservation/time range, transition and notification timing, exemption coordination",
+      "service authorization and resource scope",
+      "operation version/result semantics and reactivation",
+      "M1 V2 schema and all effective writer lock protocol"
+    ],
+    "user_work": "M3 owner not determined: no immediate contact required; retain handoff, later coordinate real affected-owner review",
+    "ai_work": "prepare concrete review materials; implement and validate within confirmed scope after review",
+    "b_handoff": "still deferred until A completion; no early B contact required",
+    "other_business_implemented": false,
+    "committed": false,
+    "messages_sent": false,
+    "review_packet": "docs/process/m1-external-occupancy-review.md",
+    "repair_principle": {
+      "by": "leafwhisper286",
+      "at": "2026-10-29",
+      "statement": "我同意",
+      "approved_as": "proposal for M3 review",
+      "details": [
+        "preserve historical record of reservations necessarily terminated by maintenance",
+        "use DISRUPTED and exempt student violation",
+        "do not automatically revive terminated bookings after repair release"
+      ],
+      "m3_owner_approved": false,
+      "affected_time_range_and_transition_timing": "pending"
+    },
+    "m3_owner_arrangement": {
+      "at": "2026-10-29",
+      "user_statement": "M3负责任人尚未确定，是否可以先写入M1-A给其他部分的规则/说明书",
+      "owner": null,
+      "action": "maintain unified handoff rules now; real review after owner determined; no current M3 contact required",
+      "contract_or_schema_approval": false
+    },
+    "repository_inspection": {
+      "at": "2026-10-29",
+      "via": "GitHub connector read-only",
+      "ref": "main at request time; no full repository/PR/Issue claim",
+      "files": [
+        "spec/project.json",
+        "services/maintenance/README.md",
+        "docs/requirements/m2.md",
+        "contracts/README.md"
+      ],
+      "m3_owner_registered": false,
+      "messages_or_remote_mutations": false
+    },
+    "deferral": {
+      "at": "2026-10-29",
+      "instruction": "cross-module confirmation/integration later; ordinary personal booking first",
+      "implementation_approved": false,
+      "notes": "deferral does not claim complete occupancy checks or other-owner approval"
+    }
+  },
+  "personal_runtime_stage": {
+    "status": "implemented_and_locally_validated; human_script_and_specified_ui_accepted",
+    "authorization": {
+      "at": "2026-10-29",
+      "by": "leafwhisper286",
+      "instruction": "部分内容由于需要和其他模块联调，和跨模块接口确认，可以先留着之后再做，我们先完成“正式预约功能”，后续再做补充",
+      "scope": "ordinary M1 personal booking code/config/page first; defer external integration and contract review; not deployment approval"
+    },
+    "window_confirmation": {
+      "statement": "按自然日：允许预约到明天结束前的时段",
+      "mode": "CALENDAR_DAYS",
+      "days": 1,
+      "timezone": "Asia/Shanghai"
+    },
+    "plan": "docs/architecture/m1-personal-runtime-plan.md",
+    "contract": "contracts/m1-personal-api.md",
+    "validation": "docs/process/m1-personal-runtime-validation.md",
+    "implementation": [
+      "normal jar write configuration with explicit enable/Origin/independent CSRF secret",
+      "shared handler/protection with old isolated demo",
+      "calendar-day policy configurable and shared by query/create",
+      "normal seat-reservations page; history and recovery normal routing"
+    ],
+    "new_test_results": {
+      "seats": 164,
+      "web": 50,
+      "web_files": 9,
+      "read_tcp_regression": 28,
+      "legacy_demo_tcp_regression": 48,
+      "ordinary_packaged_jar_tcp": 53,
+      "new_mutations": 4,
+      "shared_security_mutations": 7,
+      "mutation_errors": 0,
+      "formal_java_unchanged_during_mutations": true,
+      "preview_ipv6_page_status": 200,
+      "preview_m1_proxy_anonymous_status": 401,
+      "browser_ui_checked": false,
+      "D24": "prior evidence retained; D source unchanged, not rerun"
+    },
+    "normal_jar_can_install_personal_writes": true,
+    "write_enabled_by_default": false,
+    "deployed_or_globally_released": false,
+    "m2_m3_integrated": false,
+    "schema_or_dependencies_changed": false,
+    "other_business_implemented": false,
+    "human_acceptance": {
+      "script_reverification": {
+        "at": "2026-10-29",
+        "reported_by": "leafwhisper286",
+        "explicitly_reported": {
+          "read_tcp": 28,
+          "legacy_demo_tcp": 48,
+          "ordinary_packaged_jar_tcp": 53,
+          "repository_modules": 4,
+          "repository_requirements": 27
+        },
+        "local_surefire_supplement": {
+          "tests": 164,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_mtime_shanghai": "2026-10-29 00:51:20–00:51:26",
+          "source": "AI read local reports; user did not paste Maven summary"
+        },
+        "frontend": "set-e script completed; user did not paste frontend counts or timings",
+        "browser_checked": false
+      },
+      "ui": {
+        "at": "2026-10-29",
+        "by": "leafwhisper286",
+        "statement": "结果一切正常",
+        "scope": [
+          "ordinary creation shows saved record and ID",
+          "repeat clears times; nonoverlapping new booking preserves both records with different IDs",
+          "day-after-tomorrow start rejected"
+        ],
+        "does_not_claim": [
+          "Network-specific manual inspection",
+          "line-by-line source review",
+          "other module owner approval",
+          "complete M1 acceptance",
+          "remote CI or deployment"
+        ]
+      },
+      "other_members_review": "not_claimed"
+    },
+    "committed": true,
+    "remote_ci": "not_run",
+    "deployments": "not_done",
+    "existing_user_demos_restarted_by_ai": false,
+    "remaining": [
+      "M2/M3 occupancy/source integration and real cross-module review",
+      "D in-flight disable race and midnight contract",
+      "B lifecycle/notification tasks outside A",
+      "whole-group CI/release/rollback coordination"
+    ],
+    "local_implementation_commits": {
+      "backend_and_network": "33e4a27",
+      "frontend": "91ed835"
     }
   }
 }

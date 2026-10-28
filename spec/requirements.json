@@ -318,13 +318,17 @@
       "implementation": [
         "services/seats/src/main/java/io/campusflow/seats/ReservationPolicy.java",
         "services/seats/src/main/java/io/campusflow/seats/TimeRange.java",
-        "services/seats/src/main/java/io/campusflow/seats/OpeningSchedule.java"
+        "services/seats/src/main/java/io/campusflow/seats/OpeningSchedule.java",
+        "services/seats/src/main/resources/application.yml",
+        "docs/architecture/m1-personal-runtime-plan.md"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/ReservationRulesTest.java",
         "docs/process/m1-core-validation.md",
         "services/seats/src/test/java/io/campusflow/seats/OpeningScheduleTest.java",
-        "docs/process/m1-availability-validation.md"
+        "docs/process/m1-availability-validation.md",
+        "scripts/check_m1_personal_mutations.py",
+        "docs/process/m1-personal-runtime-validation.md"
       ]
     },
     {
@@ -346,7 +350,11 @@
         "services/seats/src/main/java/io/campusflow/seats/http/DemoReservationHandler.java",
         "services/seats/src/main/java/io/campusflow/seats/http/ReservationReadController.java",
         "apps/web/src/components/ReservationSubmitPanel.vue",
-        "contracts/m1-reservation-demo-api.md"
+        "contracts/m1-reservation-demo-api.md",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationHandler.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationWriteConfiguration.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationWriteAccess.java",
+        "contracts/m1-personal-api.md"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/ReservationStoreTest.java",
@@ -356,7 +364,10 @@
         "apps/web/src/components/ReservationSubmitPanel.test.ts",
         "scripts/check_m1_submit.py",
         "scripts/check_m1_submit_mutations.py",
-        "docs/process/m1-reservation-submit-validation.md"
+        "docs/process/m1-reservation-submit-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/http/ReservationWriteAccessTest.java",
+        "scripts/check_m1_personal.py",
+        "docs/process/m1-personal-runtime-validation.md"
       ]
     },
     {
@@ -390,7 +401,10 @@
         "apps/web/src/components/ReservationSubmitPanel.test.ts",
         "scripts/check_m1_submit.py",
         "scripts/check_m1_submit_mutations.py",
-        "docs/process/m1-reservation-submit-validation.md"
+        "docs/process/m1-reservation-submit-validation.md",
+        "scripts/check_m1_personal.py",
+        "scripts/check_m1_personal_mutations.py",
+        "docs/process/m1-personal-runtime-validation.md"
       ]
     },
     {
@@ -431,7 +445,8 @@
         "apps/web/src/views/MyReservationsView.vue",
         "apps/web/src/views/SeatQueryView.vue",
         "contracts/m1-history-api.md",
-        "docs/architecture/m1-history-plan.md"
+        "docs/architecture/m1-history-plan.md",
+        "contracts/m1-personal-api.md"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
@@ -445,7 +460,9 @@
         "apps/web/src/components/SeatQueryView.test.ts",
         "scripts/check_m1_history_mutations.py",
         "scripts/check-m1-history.sh",
-        "docs/process/m1-history-validation.md"
+        "docs/process/m1-history-validation.md",
+        "scripts/check_m1_personal.py",
+        "docs/process/m1-personal-runtime-validation.md"
       ]
     },
     {
@@ -548,7 +565,9 @@
         "services/seats/src/main/java/io/campusflow/seats/http/DemoReservationHandler.java",
         "services/seats/src/main/java/io/campusflow/seats/http/ReservationReadController.java",
         "apps/web/src/components/ReservationSubmitPanel.vue",
-        "contracts/m1-reservation-demo-api.md"
+        "contracts/m1-reservation-demo-api.md",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationWriteConfiguration.java",
+        "contracts/m1-personal-api.md"
       ],
       "verification": [
         "services/platform/src/test/java/io/campusflow/platform/PlatformIntegrationTest.java",
@@ -565,7 +584,9 @@
         "apps/web/src/components/ReservationSubmitPanel.test.ts",
         "scripts/check_m1_submit.py",
         "scripts/check_m1_submit_mutations.py",
-        "docs/process/m1-reservation-submit-validation.md"
+        "docs/process/m1-reservation-submit-validation.md",
+        "scripts/check_m1_personal.py",
+        "docs/process/m1-personal-runtime-validation.md"
       ]
     }
   ]

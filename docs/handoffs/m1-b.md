@@ -116,3 +116,9 @@ ReservationStore.createValidated(intent,key,authorize,validateNew)在相同用�
 契约[本人历史/复用](../../contracts/m1-history-api.md)，验证/用户步骤[本轮记录](../process/m1-history-validation.md)。AI本地M1157/web46/TCP28+48/四项破坏实验通过；本轮用户验收、提交和远程CI未发生。说明书仍由用户在A完成后交接，未发送、未登记B本人批准。
 
 2026-10-29历史阶段验收更新：用户已确认脚本、三组历史/再次预约页面结果，并在日期＋整点下拉和开始/结束时间标签调整后接受并继续。本轮按既定流程保存本地提交；仅本地验证和上述人工观察，未推送/PR/远程CI/部署或登记其他负责人批准。说明书继续累积，尚未发送。
+
+## 10. 普通个人预约入口新增（脚本及指定页面已确认）
+
+用户要求外部联调后补、先完成普通个人功能。新增正常jar配置写入口/正常页面，复用原ReservationStore.createValidated锁内事务/幂等/在线鉴权，五种状态、三表V1及PENDING事件不改，未新增B生命周期/违约/通知任务。自然日窗口已由A明确选择，普通配置默认CALENDAR_DAYS，旧演示显式ROLLING。
+
+普通能力canCreateReservation与旧canCreateDemoReservation分开，返回stage是当前入口展示模式，不是预约创建来源或状态。B仍应读取M1记录/版本并遵守共享锁，不依赖前端stage判断来源或违约。详细[普通契约](../../contracts/m1-personal-api.md)与[验证](../process/m1-personal-runtime-validation.md)，目前164/50/网络28+48+53通过，用户已确认本批脚本及正常创建/历史复用/自然日窗口三项页面结果，按流程保存本地提交，B交接仍等A完成后由用户转交，未发送。
