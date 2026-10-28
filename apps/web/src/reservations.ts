@@ -1,5 +1,8 @@
 import {ApiError} from './api'
 import {m1Get} from './m1Api'
+import type {QueryRoom} from './m1Api'
+export interface RepeatContext {reservationId:string;room:QueryRoom;seat:{id:string;code:string};requiresNewTime:true;canReserve:false}
+export interface ReservationHistory {items:OwnReservation[];size:number;nextCursor:string}
 export interface ReservationIntent {roomId:string;seatId:string;startAt:string;endAt:string}
 export interface PendingReservation {userId:string;key:string;intent:ReservationIntent;seatCode:string;roomCode:string}
 export interface OwnReservation extends ReservationIntent {id:string;status:string;version:number;resourceVersion:number;stage:'PERSONAL_DEMO';productionReady:false;replayed?:boolean}

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { can, landingPath, loadSession, session } from './session'
 import SeatQueryView from './views/SeatQueryView.vue'
+import MyReservationsView from './views/MyReservationsView.vue'
 import LoginView from './views/LoginView.vue'
 import OverviewView from './views/OverviewView.vue'
 import ResourcesView from './views/ResourcesView.vue'
@@ -14,6 +15,7 @@ export const router = createRouter({ history: createWebHistory(), routes: [
   {path:'/', component:OverviewView, meta:{title:'工作台'}},
   {path:'/seat-reservation-demo',component:SeatQueryView,props:{demo:true},meta:{title:'个人预约演示',permission:'seats.availability.read'}},
   {path:'/seat-query',component:SeatQueryView,meta:{title:'座位查询',permission:'seats.availability.read'}},
+  {path:'/my-reservations',component:MyReservationsView,meta:{title:'我的预约',permission:'seats.reservations.read.own'}},
   {path:'/resources', component:ResourcesView, meta:{title:'空间资源',permission:'spaces.read'}},
   {path:'/users', component:UsersView, meta:{title:'账号与权限',permission:'users.manage'}},
   {path:'/notifications', component:NotificationsView, meta:{title:'通知中心'}},

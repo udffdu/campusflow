@@ -14,4 +14,4 @@ export async function refreshUnread() {
   const result = await api<{count:number}>('/notifications/unread'); session.unread = result.count
 }
 
-export function landingPath() { return can('seats.availability.read') && !can('spaces.read') ? '/seat-query' : '/' }
+export function landingPath() { return !can('spaces.read') ? can('seats.availability.read')?'/seat-query':can('seats.reservations.read.own')?'/my-reservations':'/' : '/' }
