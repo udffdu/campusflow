@@ -13,6 +13,7 @@ import NotFoundView from './views/NotFoundView.vue'
 export const router = createRouter({ history: createWebHistory(), routes: [
   {path:'/login', component:LoginView, meta:{title:'登录'}},
   {path:'/', component:OverviewView, meta:{title:'工作台'}},
+  {path:'/seat-reservations',component:SeatQueryView,props:{booking:true},meta:{title:'座位预约',permission:'seats.availability.read'}},
   {path:'/seat-reservation-demo',component:SeatQueryView,props:{demo:true},meta:{title:'个人预约演示',permission:'seats.availability.read'}},
   {path:'/seat-query',component:SeatQueryView,meta:{title:'座位查询',permission:'seats.availability.read'}},
   {path:'/my-reservations',component:MyReservationsView,meta:{title:'我的预约',permission:'seats.reservations.read.own'}},

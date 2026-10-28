@@ -5,15 +5,15 @@ export interface RepeatContext {reservationId:string;room:QueryRoom;seat:{id:str
 export interface ReservationHistory {items:OwnReservation[];size:number;nextCursor:string}
 export interface ReservationIntent {roomId:string;seatId:string;startAt:string;endAt:string}
 export interface PendingReservation {userId:string;key:string;intent:ReservationIntent;seatCode:string;roomCode:string}
-export interface OwnReservation extends ReservationIntent {id:string;status:string;version:number;resourceVersion:number;stage:'PERSONAL_DEMO';productionReady:false;replayed?:boolean}
-export interface Capabilities {stage:string;canCreateDemoReservation:boolean;canReadOwn:boolean;productionReady:false}
+export interface OwnReservation extends ReservationIntent {id:string;status:string;version:number;resourceVersion:number;stage:'PERSONAL_DEMO'|'PERSONAL';productionReady:false;replayed?:boolean}
+export interface Capabilities {stage:string;canCreateDemoReservation:boolean;canCreateReservation?:boolean;uncheckedSources?:string[];advanceMode?:string;advanceDays?:number;durationHours?:number;canReadOwn:boolean;productionReady:false}
 const prefix='campusflow.pending-reservation.'
 export function clearPendingReservations(){for(let i=sessionStorage.length-1;i>=0;i--){const key=sessionStorage.key(i);if(key?.startsWith(prefix))sessionStorage.removeItem(key)}}
 export function pendingFor(userId:string):PendingReservation|undefined {
   try{const p=JSON.parse(sessionStorage.getItem(prefix+userId)??'null');if(p?.userId===userId&&typeof p.key==='string'&&p.intent&&['roomId','seatId','startAt','endAt'].every(k=>typeof p.intent[k]==='string'))return p}catch{}
 }
 export function savePending(p:PendingReservation){sessionStorage.setItem(prefix+p.userId,JSON.stringify(p))}
-export function validOwnReservation(value:unknown):value is OwnReservation {const v=value as OwnReservation;return !!v&&typeof v.id==='string'&&!!v.id&&typeof v.seatId==='string'&&typeof v.roomId==='string'&&Number.isFinite(Date.parse(v.startAt))&&Number.isFinite(Date.parse(v.endAt))&&['CONFIRMED','CHECKED_IN','COMPLETED','NO_SHOW','DISRUPTED'].includes(v.status)&&v.version>0&&v.resourceVersion>0&&v.stage==='PERSONAL_DEMO'&&v.productionReady===false}
+export function validOwnReservation(value:unknown):value is OwnReservation {const v=value as OwnReservation;return !!v&&typeof v.id==='string'&&!!v.id&&typeof v.seatId==='string'&&typeof v.roomId==='string'&&Number.isFinite(Date.parse(v.startAt))&&Number.isFinite(Date.parse(v.endAt))&&['CONFIRMED','CHECKED_IN','COMPLETED','NO_SHOW','DISRUPTED'].includes(v.status)&&v.version>0&&v.resourceVersion>0&&['PERSONAL_DEMO','PERSONAL'].includes(v.stage)&&v.productionReady===false}
 export function finishPending(userId:string){sessionStorage.removeItem(prefix+userId)}
 window.addEventListener('session-expired',clearPendingReservations)
 export async function submitReservation(p:PendingReservation):Promise<OwnReservation>{

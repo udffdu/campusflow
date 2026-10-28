@@ -7,8 +7,8 @@ import { roleNames } from './types'
 import Icon from './components/Icon.vue'
 import {m1Get} from './m1Api'
 import {clearPendingReservations,type Capabilities} from './reservations'
-const demoAvailable=ref(false)
-watch(()=>session.user?.id,async (id,previous)=>{if(previous&&previous!==id)clearPendingReservations();demoAvailable.value=false;if(id&&can('seats.availability.read'))try{const caps=await m1Get<Capabilities>('/reservation-capabilities');if(session.user?.id===id)demoAvailable.value=caps.canCreateDemoReservation}catch{}},{immediate:true})
+const demoAvailable=ref(false);const bookingAvailable=ref(false)
+watch(()=>session.user?.id,async (id,previous)=>{if(previous&&previous!==id)clearPendingReservations();demoAvailable.value=false;bookingAvailable.value=false;if(id&&can('seats.availability.read'))try{const caps=await m1Get<Capabilities>('/reservation-capabilities');if(session.user?.id===id){demoAvailable.value=caps.canCreateDemoReservation;bookingAvailable.value=!!caps.canCreateReservation}}catch{}},{immediate:true})
 import Modal from './components/Modal.vue'
 const route = useRoute(); const router = useRouter(); const menuOpen = ref(false)
 const passwordOpen = ref(false); const currentPassword = ref(''); const newPassword = ref(''); const error = ref(''); const busy = ref(false)
@@ -16,6 +16,7 @@ const navigation = computed(() => [
   {path:'/',name:'工作台',icon:'grid',show:true}, {path:'/resources',name:'空间资源',icon:'space',show:can('spaces.read')},
   {path:'/seat-query',name:'座位查询',icon:'chair',show:can('seats.availability.read')},
   {path:'/my-reservations',name:'我的预约',icon:'chair',show:can('seats.reservations.read.own')},
+  {path:'/seat-reservations',name:'座位预约',icon:'chair',show:bookingAvailable.value},
   {path:'/seat-reservation-demo',name:'个人预约演示',icon:'chair',show:demoAvailable.value},
   {path:'/notifications',name:'通知中心',icon:'bell',show:true},
   {path:'/users',name:'账号与权限',icon:'users',show:can('users.manage')},

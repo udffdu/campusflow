@@ -8,9 +8,11 @@ import Pagination from '../components/Pagination.vue'
 import ReservationSubmitPanel from '../components/ReservationSubmitPanel.vue'
 import {pendingFor,type Capabilities,type ReservationIntent,type RepeatContext} from '../reservations'
 import {session} from '../session'
-const props=withDefaults(defineProps<{demo?:boolean}>(),{demo:false})
+const props=withDefaults(defineProps<{demo?:boolean;booking?:boolean}>(),{demo:false,booking:false})
 const route=useRoute();const router=useRouter();const repeat=ref<RepeatContext>()
-const repeatId=computed(()=>props.demo?route.query.repeatReservationId:undefined)
+const writeMode=computed(()=>props.demo||props.booking)
+const canCreate=computed(()=>props.booking?caps.value?.canCreateReservation:props.demo&&caps.value?.canCreateDemoReservation)
+const repeatId=computed(()=>writeMode.value?route.query.repeatReservationId:undefined)
 const caps=ref<Capabilities>();const pending=ref(false);const selection=ref<ReservationIntent&{seatCode:string;roomCode:string}>()
 const rooms=ref<QueryPage<QueryRoom>>({items:[],page:0,size:20,total:0});const roomId=ref('');const roomPage=ref(0)
 const roomLoading=ref(false);const roomError=ref('');const error=ref('');const busy=ref(false);const result=ref<SeatCandidates>()
@@ -69,12 +71,12 @@ async function initialize(){
 }
 watch(()=>repeatId.value,()=>{void initialize()},{immediate:true})
 const reasons={NONE:'当前条件下没有候选座位，可尝试其他教室或时段。',ROOM_INACTIVE:'教室或上级空间已停用，请刷新教室列表。',OUTSIDE_OPENING_HOURS:'该时段未完整覆盖在教室开放时间内。',USER_TIME_CONFLICT:'你在该时段已有有效预约，请更换时段。'}
-onMounted(()=>{if(props.demo)void m1Get<Capabilities>('/reservation-capabilities').then(value=>{if(alive)caps.value=value}).catch(e=>{if(alive)error.value=message(e)})});onUnmounted(()=>{alive=false;querySequence++;roomSequence++})
+onMounted(()=>{if(writeMode.value)void m1Get<Capabilities>('/reservation-capabilities').then(value=>{if(alive)caps.value=value}).catch(e=>{if(alive)error.value=message(e)})});onUnmounted(()=>{alive=false;querySequence++;roomSequence++})
 </script>
 <template>
-  <div class="page-heading"><div><div class="eyebrow">M1 / SEAT QUERY</div><h1>{{demo?'个人预约演示':'座位查询'}}</h1><p>选择教室与学习时段，查找符合条件的候选座位。</p></div><span class="badge neutral">{{demo?'独立演示':'只读查询'}}</span></div>
-  <div class="query-notice" role="note"><Icon name="shield"/><div><strong>{{demo?'仅本地演示，正式预约暂未开放':'当前仅支持查询，预约暂未开放'}}</strong><p>结果已检查院系范围、开放时间、启停、插座及个人预约占用；尚未接入整教室申请和维修占用，候选结果不保证可预约。</p></div></div>
-  <div v-if="repeatId" class="query-notice" role="note"><div><strong>再次预约{{repeat?' · '+repeat.room.code+' · '+repeat.seat.code:''}}</strong><p>请重新填写开始和结束时间。旧预约保持不变；查询和提交都会重新校验当前条件。</p><button class="text-link" :disabled="pending||busy" @click="router.replace('/seat-reservation-demo')">重新选择其他座位</button></div></div>
+  <div class="page-heading"><div><div class="eyebrow">M1 / SEAT QUERY</div><h1>{{booking?'座位预约':demo?'个人预约演示':'座位查询'}}</h1><p>选择教室与学习时段，查找符合条件的候选座位。</p></div><span class="badge neutral">{{booking?'个人预约':demo?'独立演示':'只读查询'}}</span></div>
+  <div class="query-notice" role="note"><Icon name="shield"/><div><strong>{{booking?'当前支持个人预约，整室申请和维修限制待接入':demo?'仅本地演示，正式预约暂未开放':'当前仅支持查询，预约暂未开放'}}</strong><p>结果已检查院系范围、开放时间、启停、插座及个人预约占用；尚未接入整教室申请和维修占用，候选结果不保证可预约。</p></div></div>
+  <div v-if="repeatId" class="query-notice" role="note"><div><strong>再次预约{{repeat?' · '+repeat.room.code+' · '+repeat.seat.code:''}}</strong><p>请重新填写开始和结束时间。旧预约保持不变；查询和提交都会重新校验当前条件。</p><button class="text-link" :disabled="pending||busy" @click="router.replace(booking?'/seat-reservations':'/seat-reservation-demo')">重新选择其他座位</button></div></div>
   <section class="panel query-panel">
     <div class="panel-heading"><h2>查询条件</h2><button class="text-link" :disabled="roomLoading||busy||pending" @click="initialize">刷新教室</button></div>
     <p v-if="roomError" role="alert" class="form-error">{{roomError}} <button class="text-link" @click="initialize">重试</button></p>
@@ -87,6 +89,7 @@ onMounted(()=>{if(props.demo)void m1Get<Capabilities>('/reservation-capabilities
           <div class="query-time"><label>开始日期（上海）<input v-model="startDate" name="start-date" type="date" required></label><label>开始时间<select v-model="startHour" name="start-hour" required><option value="" disabled>请选择</option><option v-for="hour in hours" :key="hour" :value="hour">{{hour}}时</option></select></label></div>
           <div class="query-time"><label>结束日期（上海）<input v-model="endDate" name="end-date" type="date" required></label><label>结束时间<select v-model="endHour" name="end-hour" required><option value="" disabled>请选择</option><option v-for="hour in hours" :key="hour" :value="hour">{{hour}}时</option></select></label></div>
         </div>
+        <p v-if="booking" class="muted query-help"><template v-if="caps?.advanceMode==='CALENDAR_DAYS'">{{caps.advanceDays===1?'可预约今天和明天内开始的时段':`可预约至今后${caps.advanceDays}个自然日内开始的时段`}}；单次最多{{caps.durationHours}}小时。</template><template v-else>预约窗口和时长以当前服务配置为准。</template></p>
         <p class="muted query-help">按整点预约，分钟固定为00。结束时间须晚于开始时间，且整个时段都在开放时间内；预约窗口和单次时长由服务校验。</p>
         <details v-if="room"><summary>查看教室每周开放时间</summary><p v-for="(h,i) in room.openingHours" :key="i">周{{'一二三四五六日'[h.day-1]}} {{h.start.slice(0,5)}} — {{h.end.slice(0,5)}}</p><p v-if="!room.openingHours.length">未设置开放时段</p></details>
         <label class="query-checkbox"><input v-model="power" type="checkbox">只看有插座的座位</label>
@@ -96,13 +99,13 @@ onMounted(()=>{if(props.demo)void m1Get<Capabilities>('/reservation-capabilities
     <Pagination v-if="!repeatId&&!roomLoading&&!roomError&&rooms.total&&!pending" :page="roomPage" :size="20" :total="rooms.total" @change="loadRooms($event)"/>
     <p v-if="error" role="alert" class="form-error">{{error}}</p>
   </section>
-  <p v-if="demo&&caps&&!caps.canCreateDemoReservation" role="status" class="form-error">本环境未开放演示提交，或当前账号没有创建权限。</p>
-  <ReservationSubmitPanel v-if="demo" :selection="selection" :can-create="caps?.canCreateDemoReservation??false" @pending="pending=$event" @created="result=undefined;selection=undefined"/>
+  <p v-if="writeMode&&caps&&!canCreate" role="status" class="form-error">本环境未开放当前预约入口，或当前账号没有创建权限。</p>
+  <ReservationSubmitPanel v-if="writeMode" :selection="selection" :demo="demo" :can-create="canCreate??false" @pending="pending=$event" @created="result=undefined;selection=undefined"/>
   <section v-if="result" class="panel query-panel" aria-live="polite">
     <div class="panel-heading"><h2>{{repeat?'本页原座位结果':'候选结果'}} <span class="count-pill">{{repeat?visibleSeats.length:result.total}} 个</span></h2><span class="muted">查询不占座</span></div>
     <p v-if="!result.items.length" role="status">{{reasons[result.reason]}}</p>
     <p v-else-if="repeat&&!visibleSeats.length" role="status">此页没有原座位，请翻页核对；若所有页均无此座位，请换时段或重新选择其他座位。</p>
-    <div class="candidate-grid"><article v-for="seat in visibleSeats" :key="seat.id" class="candidate-card"><Icon name="chair" :size="24"/><strong>{{seat.code}}</strong><span class="badge" :class="{neutral:!seat.hasPowerOutlet}">{{seat.hasPowerOutlet?'有插座':'无插座标记'}}</span><button v-if="demo&&caps?.canCreateDemoReservation" class="button secondary" :disabled="pending||busy" @click="selectSeat(seat)">选择此座位</button><small v-else>候选座位 · 暂不可提交预约</small></article></div>
+    <div class="candidate-grid"><article v-for="seat in visibleSeats" :key="seat.id" class="candidate-card"><Icon name="chair" :size="24"/><strong>{{seat.code}}</strong><span class="badge" :class="{neutral:!seat.hasPowerOutlet}">{{seat.hasPowerOutlet?'有插座':'无插座标记'}}</span><button v-if="writeMode&&canCreate" class="button secondary" :disabled="pending||busy" @click="selectSeat(seat)">选择此座位</button><small v-else>候选座位 · 暂不可提交预约</small></article></div>
     <Pagination v-if="!pending" :page="result.page" :size="result.size" :total="result.total" @change="search($event)"/>
   </section>
 </template>

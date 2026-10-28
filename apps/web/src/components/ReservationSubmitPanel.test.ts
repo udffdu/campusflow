@@ -46,3 +46,8 @@ it('retains the original request when recovery returns an incomplete response',a
   savePending({userId:'u',key:'incomplete',intent:selection,roomCode:'A101',seatCode:'S1'});get.mockResolvedValueOnce({});await open()
   expect(pendingFor('u')?.key).toBe('incomplete');expect(wrapper!.text()).not.toContain('演示预约已保存');expect(wrapper!.text()).toContain('响应不完整')
 })
+it('ordinary personal mode submits and restores a PERSONAL record without demo-only wording',async()=>{
+  submit.mockResolvedValueOnce({...record,stage:'PERSONAL'});wrapper=mount(ReservationSubmitPanel,{props:{selection,canCreate:true,demo:false}});await flushPromises()
+  expect(wrapper.text()).toContain('确认预约');await wrapper.findAll('button').find(b=>b.text()==='提交预约')!.trigger('click');await flushPromises()
+  expect(wrapper.text()).toContain('预约已保存');expect(wrapper.text()).not.toContain('演示预约已保存');expect(pendingFor('u')).toBeUndefined();expect(submit).toHaveBeenCalledTimes(1)
+})

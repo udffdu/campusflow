@@ -76,3 +76,12 @@ it('shows a repeat resource failure without a selectable form',async()=>{
   route.query={repeatReservationId:'old-booking'};get.mockRejectedValue(new Error('原教室或座位已停用'))
   wrapper=mount(SeatQueryView,{props:{demo:true}});await flushPromises();expect(wrapper.text()).toContain('原教室或座位已停用');expect(wrapper.find('form').exists()).toBe(false)
 })
+it('ordinary booking uses its own capability and displays the configured calendar window',async()=>{
+  get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?{canCreateReservation:true,canCreateDemoReservation:false,advanceMode:'CALENDAR_DAYS',advanceDays:1,durationHours:4}:path.startsWith('/rooms')?{items:[room],page:0,size:20,total:1}:data)
+  wrapper=mount(SeatQueryView,{props:{booking:true}});await flushPromises();await fillTimes('2026-10-29T09:00','2026-10-29T10:00');await wrapper.get('form').trigger('submit');await flushPromises()
+  expect(wrapper.text()).toContain('可预约今天和明天');expect(wrapper.text()).toContain('整室申请和维修限制待接入');await wrapper.findAll('button').find(b=>b.text()==='选择此座位')!.trigger('click');await flushPromises();expect(wrapper.text()).toContain('确认预约');expect(wrapper.text()).not.toContain('提交演示预约')
+})
+it('legacy demo capability cannot open the ordinary page submit control',async()=>{
+  get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?{canCreateReservation:false,canCreateDemoReservation:true}:path.startsWith('/rooms')?{items:[room],page:0,size:20,total:1}:data)
+  wrapper=mount(SeatQueryView,{props:{booking:true}});await flushPromises();await wrapper.get('form').trigger('submit');await flushPromises();expect(wrapper.findAll('button').some(b=>b.text()==='选择此座位')).toBe(false);expect(wrapper.text()).toContain('未开放当前预约入口')
+})

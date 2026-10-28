@@ -38,3 +38,7 @@ it('discards a late history response after the signed-in user changes',async()=>
   let resolve!:(x:unknown)=>void;get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?caps:new Promise(r=>{resolve=r}));await open();const oldResolve=resolve
   get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?caps:{items:[],size:20,nextCursor:''});session.user={...session.user!,id:'other'};await flushPromises();oldResolve({items:[record],size:20,nextCursor:''});await flushPromises();expect(wrapper!.text()).not.toContain('booking-1');expect(wrapper!.text()).toContain('当前没有本人的预约记录')
 })
+it('ordinary capability routes repeat to the normal personal page and accepts ordinary records',async()=>{
+  get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?{...caps,canCreateDemoReservation:false,canCreateReservation:true,stage:'PERSONAL'}:{items:[{...record,stage:'PERSONAL'}],size:20,nextCursor:''})
+  await open();await wrapper!.findAll('button').find(b=>b.text()==='再次预约')!.trigger('click');expect(push).toHaveBeenCalledWith({path:'/seat-reservations',query:{repeatReservationId:'booking-1'}})
+})
