@@ -14,15 +14,26 @@ public final class ReservationPolicy {
     private final Duration maxAdvance;
     private final Duration maxDuration;
     private final Clock clock;
+    public enum AdvanceMode { ROLLING, CALENDAR_DAYS }
+    private final AdvanceMode advanceMode;
+    public AdvanceMode advanceMode(){return advanceMode;}
+    public long advanceDays(){return maxAdvance.toDays();}
+    public long durationHours(){return maxDuration.toHours();}
 
     public ReservationPolicy(Duration maxAdvance, Duration maxDuration, Clock clock) {
+        this(maxAdvance,maxDuration,clock,AdvanceMode.ROLLING);
+    }
+    public ReservationPolicy(Duration maxAdvance, Duration maxDuration, Clock clock,AdvanceMode mode) {
         this.maxAdvance = Objects.requireNonNull(maxAdvance, "maxAdvance");
         this.maxDuration = Objects.requireNonNull(maxDuration, "maxDuration");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.advanceMode=Objects.requireNonNull(mode,"mode");
         if (maxAdvance.isNegative() || maxDuration.isNegative() || maxDuration.isZero()
                 || maxDuration.getNano() != 0 || maxDuration.getSeconds() % 3600 != 0) {
             throw new IllegalArgumentException("提前窗口须非负，时长上限须为正整数小时");
         }
+        if(mode==AdvanceMode.CALENDAR_DAYS&&(maxAdvance.getNano()!=0||maxAdvance.getSeconds()%86400!=0||maxAdvance.toDays()>365))
+            throw new IllegalArgumentException("自然日窗口须为0～365整天");
     }
 
     public void validate(TimeRange range) {
@@ -34,7 +45,10 @@ public final class ReservationPolicy {
         if (range.startAt().isBefore(now)) {
             throw new ReservationRuleException(IN_PAST, "不能预约已开始的时段");
         }
-        if (range.startAt().isAfter(now.plus(maxAdvance))) {
+        boolean outside=advanceMode==AdvanceMode.CALENDAR_DAYS
+                ? !range.startAt().atZone(CAMPUS_ZONE).toLocalDate().isBefore(now.atZone(CAMPUS_ZONE).toLocalDate().plusDays(maxAdvance.toDays()+1))
+                : range.startAt().isAfter(now.plus(maxAdvance));
+        if (outside) {
             throw new ReservationRuleException(ADVANCE_WINDOW, "预约开始时间超出可提前预约窗口");
         }
         if (range.duration().compareTo(maxDuration) > 0) {

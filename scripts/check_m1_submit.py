@@ -21,7 +21,7 @@ import urllib.request
 from check_m1_http import ROOT, DEPT, BrowserHTTP, Process, check_ports, free_port, launch, period, seed, update_resource
 
 
-def checks(admin, users, data, d_base, m_base, closed_base, m1, origin, password):
+def checks(admin, users, data, d_base, m_base, closed_base, m1, origin, password,stage='PERSONAL_DEMO'):
     done = []
     student = BrowserHTTP(d_base)
     student.login('student', password)
@@ -63,7 +63,7 @@ def checks(admin, users, data, d_base, m_base, closed_base, m1, origin, password
     check('D management permission is not reservation permission',lambda:manager.request('/api/m1/v1/csrf',status=403,base=m_base))
     check('denials leave all M1 rows unchanged',lambda:equal(m1.command({'op':'snapshot'}),initial))
     created=post(student,payload(),'first')
-    check('create confirmed personal demo reservation',lambda:equal((created['status'],created['stage'],created['productionReady']),('CONFIRMED','PERSONAL_DEMO',False)))
+    check('create confirmed personal reservation ('+stage+')',lambda:equal((created['status'],created['stage'],created['productionReady']),('CONFIRMED',stage,False)))
     saved=m1.command({'op':'snapshot'})
     check('same request replays original ID',lambda:equal(post(student,payload(),'first',200)['id'],created['id']))
     check('replay does not duplicate any M1 row or event',lambda:equal(m1.command({'op':'snapshot'}),saved))
@@ -163,7 +163,7 @@ def main():
     if not 12<=len(password.encode())<=72:raise RuntimeError('密码须为12～72字节')
     env={k:v for k,v in os.environ.items() if not k.startswith(('M1_','SPRING_','DATABASE_','BOOTSTRAP_','COOKIE_')) and k not in ('PORT','M2_SERVICE_KEY','M3_SERVICE_KEY')}
     key=secrets.token_urlsafe(40);csrf_secret=base64.b64encode(secrets.token_bytes(32)).decode()
-    env.update(BOOTSTRAP_ADMIN_PASSWORD=password,M1_SERVICE_KEY=key,M1_D_BASE_URL=f'http://127.0.0.1:{dport}',M1_MAX_ADVANCE='PT24H',M1_MAX_DURATION='PT4H',M1_PERSONAL_DEMO='true',M1_DEMO_ORIGIN=origin,M1_DEMO_CSRF_SECRET=csrf_secret)
+    env.update(BOOTSTRAP_ADMIN_PASSWORD=password,M1_SERVICE_KEY=key,M1_D_BASE_URL=f'http://127.0.0.1:{dport}',M1_ADVANCE_MODE='ROLLING',M1_MAX_ADVANCE='PT24H',M1_MAX_DURATION='PT4H',M1_PERSONAL_DEMO='true',M1_DEMO_ORIGIN=origin,M1_DEMO_CSRF_SECRET=csrf_secret)
     logs=ROOT/'tmp'/('m1-submit-'+str(time.time_ns()));logs.mkdir(parents=True)
     with ExitStack() as stack:
         d=launch(stack,'platform',dport,env,logs);m1=launch(stack,'seats',mport,env,logs)

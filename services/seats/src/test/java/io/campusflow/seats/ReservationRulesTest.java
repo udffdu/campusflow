@@ -14,6 +14,24 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ReservationRulesTest {
+    @Test void calendarDayWindowIncludesTomorrowEvenBeyondTwentyFourHours() {
+        var p=new ReservationPolicy(Duration.ofDays(1),Duration.ofHours(4),Clock.fixed(at("08:20:00"),ZoneOffset.UTC),ReservationPolicy.AdvanceMode.CALENDAR_DAYS);
+        assertDoesNotThrow(()->p.validate(new TimeRange(at("22:00:00").plus(Duration.ofDays(1)),at("23:00:00").plus(Duration.ofDays(1)))));
+        assertCode(ADVANCE_WINDOW,()->p.validate(new TimeRange(at("00:00:00").plus(Duration.ofDays(2)),at("01:00:00").plus(Duration.ofDays(2)))));
+        assertCode(IN_PAST,()->p.validate(range("08:00:00","09:00:00")));
+    }
+    @Test void calendarWindowUsesShanghaiDayAndAcceptsConfigurableZeroAndTwoDays() {
+        var now=Clock.fixed(Instant.parse("2026-10-28T16:10:00Z"),ZoneOffset.UTC);
+        var today=new ReservationPolicy(Duration.ZERO,Duration.ofHours(4),now,ReservationPolicy.AdvanceMode.CALENDAR_DAYS);
+        assertDoesNotThrow(()->today.validate(new TimeRange(Instant.parse("2026-10-29T14:00:00Z"),Instant.parse("2026-10-29T15:00:00Z"))));
+        assertCode(ADVANCE_WINDOW,()->today.validate(new TimeRange(Instant.parse("2026-10-29T16:00:00Z"),Instant.parse("2026-10-29T17:00:00Z"))));
+        var two=new ReservationPolicy(Duration.ofDays(2),Duration.ofHours(4),now,ReservationPolicy.AdvanceMode.CALENDAR_DAYS);
+        assertDoesNotThrow(()->two.validate(new TimeRange(Instant.parse("2026-10-31T14:00:00Z"),Instant.parse("2026-10-31T15:00:00Z"))));
+    }
+    @Test void calendarDayConfigRejectsFractionalDaysAndHugeWindows() {
+        for(var days:new Duration[]{Duration.ofHours(1),Duration.ofSeconds(86401),Duration.ofDays(366)})
+            assertThrows(IllegalArgumentException.class,()->new ReservationPolicy(days,Duration.ofHours(4),Clock.systemUTC(),ReservationPolicy.AdvanceMode.CALENDAR_DAYS));
+    }
     private static Instant at(String local) {
         return OffsetDateTime.parse("2026-10-28T" + local + "+08:00").toInstant();
     }

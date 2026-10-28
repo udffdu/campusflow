@@ -9,12 +9,12 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/** Production stays read-only. Only a test-classpath permit can open the one isolated demo POST. */
+/** Writes require an explicitly installed ordinary or legacy-demo gateway; other methods stay closed. */
 @Component
 public final class QueryBoundary extends OncePerRequestFilter {
     private final ObjectMapper json;
-    private final org.springframework.beans.factory.ObjectProvider<DemoWritePermit> permit;
-    public QueryBoundary(ObjectMapper json,org.springframework.beans.factory.ObjectProvider<DemoWritePermit> permit) { this.json=json;this.permit=permit; }
+    private final org.springframework.beans.factory.ObjectProvider<ReservationWriteAccess> permit;
+    public QueryBoundary(ObjectMapper json,org.springframework.beans.factory.ObjectProvider<ReservationWriteAccess> permit) { this.json=json;this.permit=permit; }
     @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain) throws ServletException,IOException {
         String id=UUID.randomUUID().toString(); request.setAttribute("m1.requestId",id);
         response.setHeader("X-Request-ID",id); response.setHeader("Cache-Control","no-store");

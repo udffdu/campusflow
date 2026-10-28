@@ -29,7 +29,8 @@ class QueryHttpTest {
     private EmbeddedPostgres pg;
     private HttpServer upstream;
     private ExecutorService workers;
-    private ServletWebServerApplicationContext app,demoApp;
+    private ServletWebServerApplicationContext app,demoApp,personalApp;
+    private String personalBase;
     private String demoBase;
     private String base;
     private HttpClient http;
@@ -51,18 +52,24 @@ class QueryHttpTest {
         app=(ServletWebServerApplicationContext)new SpringApplication(SeatsApplication.class).run(
                 "--server.port=0","--spring.datasource.url="+pg.getJdbcUrl("postgres","postgres"),"--spring.datasource.username=postgres",
                 "--m1.d-base-url=http://127.0.0.1:"+upstream.getAddress().getPort(),"--m1.service-key="+KEY,
-                "--m1.max-advance=PT24H","--m1.max-duration=PT4H","--m1.connect-timeout=PT0.2S",
+                "--m1.write-enabled=false","--m1.advance-mode=ROLLING","--m1.max-advance=PT24H","--m1.max-duration=PT4H","--m1.connect-timeout=PT0.2S",
                 "--m1.read-timeout=PT0.6S","--m1.call-budget=PT1S","--m1.max-pages=3");
         base="http://127.0.0.1:"+app.getWebServer().getPort();http=HttpClient.newHttpClient();
         demoApp=(ServletWebServerApplicationContext)new SpringApplication(SeatsApplication.class,DemoFixtureConfiguration.class).run(
                 "--server.port=0","--spring.datasource.url="+pg.getJdbcUrl("postgres","postgres"),"--spring.datasource.username=postgres",
                 "--m1.d-base-url=http://127.0.0.1:"+upstream.getAddress().getPort(),"--m1.service-key="+KEY,
-                "--m1.max-advance=PT24H","--m1.max-duration=PT4H","--m1.connect-timeout=PT0.2S",
+                "--m1.write-enabled=false","--m1.advance-mode=ROLLING","--m1.max-advance=PT24H","--m1.max-duration=PT4H","--m1.connect-timeout=PT0.2S",
                 "--m1.read-timeout=PT0.6S","--m1.call-budget=PT1S","--m1.max-pages=3",
                 "--M1_DEMO_ORIGIN=http://127.0.0.1:5274","--M1_DEMO_CSRF_SECRET="+Base64.getEncoder().encodeToString(new byte[32]));
         demoBase="http://127.0.0.1:"+demoApp.getWebServer().getPort();
+        personalApp=(ServletWebServerApplicationContext)new SpringApplication(SeatsApplication.class).run(
+                "--server.port=0","--spring.datasource.url="+pg.getJdbcUrl("postgres","postgres"),"--spring.datasource.username=postgres",
+                "--m1.d-base-url=http://127.0.0.1:"+upstream.getAddress().getPort(),"--m1.service-key="+KEY,
+                "--m1.write-enabled=true","--m1.advance-mode=CALENDAR_DAYS","--m1.max-advance=PT24H","--m1.max-duration=PT4H",
+                "--m1.browser-origin=https://campus.example","--m1.csrf-secret="+Base64.getEncoder().encodeToString(new byte[32]));
+        personalBase="http://127.0.0.1:"+personalApp.getWebServer().getPort();
     }
-    @AfterAll void stop() throws Exception {if(demoApp!=null)demoApp.close();if(app!=null)app.close();if(pg!=null)pg.close();if(upstream!=null)upstream.stop(0);if(workers!=null)workers.shutdownNow();}
+    @AfterAll void stop() throws Exception {if(personalApp!=null)personalApp.close();if(demoApp!=null)demoApp.close();if(app!=null)app.close();if(pg!=null)pg.close();if(upstream!=null)upstream.stop(0);if(workers!=null)workers.shutdownNow();}
     @BeforeEach void reset() {
         calls.clear();responder=this::normal;
         new JdbcTemplate(pg.getPostgresDatabase()).execute("truncate m1.outbox_events,m1.reservation_requests,m1.reservations");
@@ -245,6 +252,26 @@ class QueryHttpTest {
         responder=e->new Reply(503,Map.of(),0);
         assertEquals(503,get("/api/m1/v1/reservations",true).statusCode());
         assertEquals(503,get("/api/m1/v1/reservations/"+UUID.randomUUID()+"/repeat-context",true).statusCode());counts(0);
+    }
+    private HttpResponse<String> personalGet(String path)throws Exception{return http.send(HttpRequest.newBuilder(URI.create(personalBase+path)).header("Cookie","CF_SESSION="+TOKEN).GET().build(),HttpResponse.BodyHandlers.ofString());}
+    private HttpResponse<String> personalPost(String csrf,String origin)throws Exception {
+        var builder=HttpRequest.newBuilder(URI.create(personalBase+"/api/m1/v1/reservations")).header("Cookie","CF_SESSION="+TOKEN).header("Content-Type","application/json").header("Idempotency-Key","ordinary-create").header("Origin",origin);
+        if(csrf!=null)builder.header("X-M1-CSRF-Token",csrf);
+        return http.send(builder.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(intent()))).build(),HttpResponse.BodyHandlers.ofString());
+    }
+    @Test void ordinaryApplicationCreatesWithoutAnyTestConfiguration()throws Exception {
+        assertEquals(0,personalApp.getBeansOfType(DemoFixtureConfiguration.class).size());
+        var caps=body(personalGet("/api/m1/v1/reservation-capabilities"));assertTrue(caps.path("canCreateReservation").asBoolean());assertFalse(caps.path("canCreateDemoReservation").asBoolean(true));assertEquals("CALENDAR_DAYS",caps.path("advanceMode").asText());
+        String token=body(personalGet("/api/m1/v1/csrf")).path("token").asText();
+        var first=personalPost(token,"https://campus.example");assertEquals(201,first.statusCode(),first.body());assertEquals("PERSONAL",body(first).path("stage").asText());
+        var replay=personalPost(token,"https://campus.example");assertEquals(200,replay.statusCode());assertEquals(body(first).path("id"),body(replay).path("id"));
+        var history=body(personalGet("/api/m1/v1/reservations"));assertEquals(1,history.path("items").size());assertEquals("PERSONAL",history.path("items").get(0).path("stage").asText());counts(1);
+    }
+    @Test void ordinaryGatewayStillRequiresCsrfOriginAndCreatePermission()throws Exception {
+        String token=body(personalGet("/api/m1/v1/csrf")).path("token").asText();
+        assertEquals(403,personalPost(null,"https://campus.example").statusCode());assertEquals(403,personalPost(token,"https://evil.example").statusCode());
+        responder=e->e.getRequestURI().getPath().endsWith("authorization")?new Reply(identity(false,Set.of(DQueryClient.PERMISSION))):normal(e);
+        assertEquals(403,personalPost(token,"https://campus.example").statusCode());counts(0);
     }
 
 }

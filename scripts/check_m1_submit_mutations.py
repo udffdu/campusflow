@@ -4,9 +4,9 @@ import check_m1_core_mutations as runner
 
 HTTP='io.campusflow.seats.http.QueryHttpTest'
 runner.MUTATIONS=[
- ('skip_csrf_origin','http/DemoReservationHandler.java','permit.verify(servlet,session);','/* deliberately bypass CSRF and Origin */',
+ ('skip_csrf_origin','http/ReservationHandler.java','permit.verify(servlet,session);','/* deliberately bypass CSRF and Origin */',
   'csrfAndOriginFailuresDoNotReachDatabase',HTTP+'#csrfAndOriginFailuresDoNotReachDatabase'),
- ('csrf_not_bound_to_session','http/DemoWritePermit.java',r'("m1-csrf\n"+session+"\n"+payload)',r'("m1-csrf\n"+"unbound"+"\n"+payload)',
+ ('csrf_not_bound_to_session','http/ReservationWriteAccess.java',r'("m1-csrf\n"+session+"\n"+payload)',r'("m1-csrf\n"+"unbound"+"\n"+payload)',
   'validTokensAreRandomAndBoundToSession','io.campusflow.seats.http.DemoWritePermitTest#validTokensAreRandomAndBoundToSession'),
  ('skip_locked_authorization','ReservationStore.java','authorize.run();','/* deliberately skip online locked authorization */',
   'lockedAuthorizationRevocationPreventsCreation',HTTP+'#lockedAuthorizationRevocationPreventsCreation'),

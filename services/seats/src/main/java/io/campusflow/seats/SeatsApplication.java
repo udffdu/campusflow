@@ -14,8 +14,8 @@ public class SeatsApplication {
     public static void main(String[] args) { SpringApplication.run(SeatsApplication.class, args); }
     @Bean Clock clock() { return Clock.systemUTC(); }
     @Bean ReservationPolicy reservationPolicy(@Value("${m1.max-advance}") Duration advance,
-            @Value("${m1.max-duration}") Duration duration, Clock clock) {
-        return new ReservationPolicy(advance, duration, clock);
+            @Value("${m1.max-duration}") Duration duration, @Value("${m1.advance-mode}") ReservationPolicy.AdvanceMode mode, Clock clock) {
+        return new ReservationPolicy(advance, duration, clock,mode);
     }
     @Bean ReservationStore reservationStore(DataSource source, ReservationPolicy policy, Clock clock) {
         return new ReservationStore(source, policy, clock, Duration.ofSeconds(2));

@@ -286,7 +286,7 @@ def main():
         if k.startswith(('SPRING_', 'M1_', 'DATABASE_', 'BOOTSTRAP_', 'COOKIE_')) or k in ('M2_SERVICE_KEY','M3_SERVICE_KEY','PORT'):
             del env[k]
     env.update(BOOTSTRAP_ADMIN_PASSWORD=password, M1_SERVICE_KEY=key, M1_D_BASE_URL=f'http://127.0.0.1:{dport}',
-               M1_MAX_ADVANCE='PT24H', M1_MAX_DURATION='PT4H')
+               M1_ADVANCE_MODE='ROLLING',M1_MAX_ADVANCE='PT24H', M1_MAX_DURATION='PT4H')
     logdir = ROOT / 'tmp' / ('m1-http-' + str(time.time_ns()))
     logdir.mkdir(parents=True, exist_ok=False)
     with ExitStack() as stack:

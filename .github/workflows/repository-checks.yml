@@ -70,10 +70,13 @@ jobs:
             services/seats/pom.xml
       - name: Prepare separate D and M1 test processes
         run: bash scripts/prepare-m1-http.sh
+      - name: Package ordinary M1 entrypoint (application tests gated separately)
+        run: ./services/platform/mvnw -B -f services/seats/pom.xml -DskipTests package
       - name: Verify actual D and M1 HTTP calls and independent PostgreSQL
         run: |
           python3 scripts/check_m1_http.py
           python3 scripts/check_m1_submit.py
+          python3 scripts/check_m1_personal.py
   web-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
