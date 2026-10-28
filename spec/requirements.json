@@ -1,6 +1,6 @@
 {
   "register_status": "partial_draft",
-  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/012部分实现，存储/锁/幂等、内部查询和用户授权的D权限/范围/插座补充已有本地验证；只读真实D网络鉴权和查询页面已有AI本地验证，本批人工复验、完整可用性与M2/M3集成仍未完成。M1-B和三项补充的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
+  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/006/012部分实现，存储/锁/幂等、内部查询和用户授权的D权限/范围/插座补充已有本地验证；只读真实D网络鉴权和查询页面已有AI本地验证，本批人工复验、完整可用性与M2/M3集成仍未完成。M1-B和三项补充的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
   "requirements": [
     {
       "id": "CF-M2-001",
@@ -341,11 +341,22 @@
       ],
       "implementation": [
         "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java",
-        "services/seats/src/main/resources/db/migration/V1__reservations.sql"
+        "services/seats/src/main/resources/db/migration/V1__reservations.sql",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationIntent.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/DemoReservationHandler.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationReadController.java",
+        "apps/web/src/components/ReservationSubmitPanel.vue",
+        "contracts/m1-reservation-demo-api.md"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/ReservationStoreTest.java",
-        "docs/process/m1-storage-validation.md"
+        "docs/process/m1-storage-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/http/DemoWritePermitTest.java",
+        "apps/web/src/components/ReservationSubmitPanel.test.ts",
+        "scripts/check_m1_submit.py",
+        "scripts/check_m1_submit_mutations.py",
+        "docs/process/m1-reservation-submit-validation.md"
       ]
     },
     {
@@ -363,12 +374,23 @@
       ],
       "implementation": [
         "services/seats/src/main/java/io/campusflow/seats/OccupancyLocks.java",
-        "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java"
+        "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationIntent.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/DemoReservationHandler.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationReadController.java",
+        "apps/web/src/components/ReservationSubmitPanel.vue",
+        "contracts/m1-reservation-demo-api.md"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/ReservationStoreTest.java",
         "scripts/check_m1_core_mutations.py",
-        "docs/process/m1-storage-validation.md"
+        "docs/process/m1-storage-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/http/DemoWritePermitTest.java",
+        "apps/web/src/components/ReservationSubmitPanel.test.ts",
+        "scripts/check_m1_submit.py",
+        "scripts/check_m1_submit_mutations.py",
+        "docs/process/m1-reservation-submit-validation.md"
       ]
     },
     {
@@ -392,15 +414,28 @@
       "module": "M1",
       "title": "本人历史查询与再次预约",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "responsibility": "A",
       "acceptance": [
         "仅能查询本人授权记录，访问他人记录拒绝或返回404，不泄露他人身份",
         "可以从历史选择同一座位并重新指定时段，重新检查当前权限、开放、资源有效性及全部占用",
         "历史保留资源标识与当时版本，资源停用后不破坏历史展示"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/seats/src/main/java/io/campusflow/seats/ReservationIntent.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/DemoReservationHandler.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationReadController.java",
+        "apps/web/src/components/ReservationSubmitPanel.vue",
+        "contracts/m1-reservation-demo-api.md"
+      ],
+      "verification": [
+        "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/http/DemoWritePermitTest.java",
+        "apps/web/src/components/ReservationSubmitPanel.test.ts",
+        "scripts/check_m1_submit.py",
+        "scripts/check_m1_submit_mutations.py",
+        "docs/process/m1-reservation-submit-validation.md"
+      ]
     },
     {
       "id": "CF-M1-007",
@@ -497,7 +532,12 @@
         "services/seats/src/main/java/io/campusflow/seats/http/DQueryClient.java",
         "services/seats/src/main/java/io/campusflow/seats/http/QueryController.java",
         "apps/web/src/views/SeatQueryView.vue",
-        "contracts/m1-query-api.md"
+        "contracts/m1-query-api.md",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationIntent.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/DemoReservationHandler.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationReadController.java",
+        "apps/web/src/components/ReservationSubmitPanel.vue",
+        "contracts/m1-reservation-demo-api.md"
       ],
       "verification": [
         "services/platform/src/test/java/io/campusflow/platform/PlatformIntegrationTest.java",
@@ -509,7 +549,12 @@
         "scripts/check_m1_http.py",
         "scripts/check_m1_browser.cjs",
         "scripts/check_m1_http_mutations.py",
-        "docs/process/m1-http-query-validation.md"
+        "docs/process/m1-http-query-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/http/DemoWritePermitTest.java",
+        "apps/web/src/components/ReservationSubmitPanel.test.ts",
+        "scripts/check_m1_submit.py",
+        "scripts/check_m1_submit_mutations.py",
+        "docs/process/m1-reservation-submit-validation.md"
       ]
     }
   ]

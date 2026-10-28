@@ -145,7 +145,11 @@
     "d_supplement_validation": "docs/process/m1-d-supplement-validation.md",
     "http_query_plan": "docs/architecture/m1-http-query-plan.md",
     "http_query_validation": "docs/process/m1-http-query-validation.md",
-    "query_api": "contracts/m1-query-api.md"
+    "query_api": "contracts/m1-query-api.md",
+    "reservation_submit_plan": "docs/architecture/m1-reservation-submit-plan.md",
+    "m1_a_boundary": "docs/requirements/m1-a-boundary.md",
+    "reservation_submit_validation": "docs/process/m1-reservation-submit-validation.md",
+    "reservation_demo_api": "contracts/m1-reservation-demo-api.md"
   },
   "delivery": {
     "implemented": false,
@@ -409,5 +413,74 @@
       "3a85fd0"
     ],
     "documentation_commit_reference": "git log: docs(m1) [CF-M1-001][CF-M1-012] record read-only query acceptance"
+  },
+  "reservation_submit_stage": {
+    "status": "implemented_and_ai_locally_tested; user_script_and_three_ui_checks_confirmed",
+    "implementation_started": true,
+    "user_confirmation": {
+      "by": "leafwhisper286",
+      "at": "2026-10-28",
+      "instruction": "请你阅读任务书，再次确认任务边界，我只负责M1-A部分，和M1-B，M2，M3区分开。然后我们进行下一步",
+      "interpretation": "continue previously presented isolated M1-A reservation plan after boundary recheck; not other module business or production release approval"
+    },
+    "plan": "docs/architecture/m1-reservation-submit-plan.md",
+    "recommended_mode": "isolated_personal_demo_only",
+    "proposed_scope": [
+      "CSRF and origin protection owned by M1",
+      "D-authenticated personal creation inside existing user/room lock protocol",
+      "same-intent request replay and unknown-result recovery",
+      "own single-record read and demo UI"
+    ],
+    "production_writes_authorized": false,
+    "new_d_api_or_schema_changes_proposed": false,
+    "new_m1_migration_expected": false,
+    "m2_m3_contracts_approved": false,
+    "formal_rolling_24_hour_policy_approved": false,
+    "d_stop_race_policy_approved": false,
+    "existing_demo_restart_authorized": false,
+    "new_test_results": {
+      "seats": 141,
+      "web": 33,
+      "real_read_tcp_regression": 28,
+      "real_submission_tcp": 32,
+      "mutations": 7,
+      "new_browser_ui": "user confirmed three requested UI checks; no AI real-browser claim from component/API tests",
+      "D24": "prior evidence retained; no D Java changes"
+    },
+    "validation": "docs/process/m1-reservation-submit-validation.md",
+    "human_acceptance": "user_script_reproduced_and_three_requested_ui_checks_confirmed; source_line_review_and_Network_observation_not_reported",
+    "human_ui_verification": {
+      "at": "2026-10-28",
+      "by": "leafwhisper286",
+      "statement": "三项结果全部通过",
+      "checks": [
+        "demo creation displays saved CONFIRMED reservation and ID",
+        "refresh own record retains same ID",
+        "same-period query reports own effective reservation conflict"
+      ],
+      "scope": "isolated M1-A personal demo only; not complete M1 acceptance or other owner review"
+    },
+    "human_script_verification": {
+      "at": "2026-10-28T22:08:36+08:00",
+      "user_reported_real_read_tcp": 28,
+      "user_reported_real_submission_tcp": 32,
+      "user_reported_repository_check": "passed; 4 modules, 27 requirements",
+      "seats_local_report_corroboration": "141 tests; zero failures/errors/skips; report mtimes 22:08:25-22:08:31+08:00",
+      "web": "set-e script completion supports test/build success; count not explicitly pasted by user",
+      "classpath_duration_seconds": 0.439,
+      "duration_scope": "classpath preparation only; not test suite duration",
+      "d_tests": "not rerun; prior D24 evidence retained",
+      "browser_checked": false
+    },
+    "committed": true,
+    "implementation_commits": {
+      "backend_and_network": "a81b39a",
+      "web": "3defbec"
+    },
+    "remote_ci": "not_run",
+    "deployment": "not_done",
+    "complete_history_list": false,
+    "repeat_booking_from_history": false,
+    "other_business_implemented": false
   }
 }

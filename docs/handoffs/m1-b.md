@@ -44,7 +44,7 @@ leafwhisper286 已明确承担 M1-A/B 内部共享设计决策，并确认下述
 
 ## 5. 当前可用代码与实施状态
 
-当前范围：`services/seats` 内包含五种状态、时间区间、参数化时间校验、真实PostgreSQL预约存储/幂等/事务锁，以及内部开放计算和个人占用查询。它尚不启动HTTP服务、不访问D，也没有签到/违约任务。验证见 [核心规则](../process/m1-core-validation.md)、[存储及事务锁](../process/m1-storage-validation.md) 和 [内部查询](../process/m1-availability-validation.md)。
+当前范围：`services/seats` 内包含五种状态、时间区间、参数化时间校验、真实PostgreSQL预约存储/幂等/事务锁，以及内部开放计算和个人占用查询。服务已具备只读HTTP/D适配，本轮另新增仅隔离环境装配的个人预约提交；仍没有B签到/违约任务。验证见 [核心规则](../process/m1-core-validation.md)、[存储及事务锁](../process/m1-storage-validation.md) 和 [内部查询](../process/m1-availability-validation.md)。
 
 用户已同意 [座位查询方案](../architecture/m1-availability-plan.md) 的分阶段范围，内部查询已实现。它与完整鉴权及 M2/M3 集成有明确边界；查询不占座，终结个人预约也不自动解除外部来源限制。本批80测试已由AI本地运行通过，用户随后报告2026-10-28T14:20:20+08:00独立复验80测试及BUILD SUCCESS，耗时3.113秒。
 
@@ -52,7 +52,7 @@ leafwhisper286 已明确承担 M1-A/B 内部共享设计决策，并确认下述
 - `TimeRange`：不可变非空正区间及相交判断，支持相邻区间衔接。
 - `ReservationPolicy`：注入服务端时钟、提前窗口和单次时长参数，按 Asia/Shanghai 校验整点、过去时间、窗口和时长。
 
-其中“一天按滚动24小时且包含上边界”仍为具体化建议；核心接收参数，不把24小时绑定为用户已最终确认的默认配置。内部开放计算已实现；真实D授权/主数据适配、插座及M2/M3限制仍待接入，不能只通过时间与个人占用计算就宣称座位完整可预约。
+其中“一天按滚动24小时且包含上边界”仍为具体化建议；核心接收参数，不把24小时绑定为用户已最终确认的默认配置。内部开放计算已实现；真实D授权/主数据与插座已用于只读查询和隔离个人提交；M2/M3限制仍待接入，不能只通过时间与个人占用计算就宣称座位完整可预约。
 
 ## 5.1 已实现的存储接口与迁移
 
@@ -100,3 +100,11 @@ AccessScope并不认证会话，也不是前端载荷；现有HTTP适配层已�
 [查询契约](../../contracts/m1-query-api.md)：GET /api/m1/v1/rooms、seat-candidates；Cookie在线D鉴权，候选canReserve=false，不开放写入。M1独立应用仅自己的m1迁移/数据；D/PG不可用503、失效会话401、越权限/范围403。不得把现有ReservationStore.create直接挂HTTP而跳过D/开放/M2/M3/CSRF校验。
 
 隔离环境及真实网络28项、M1123/D24/前端22与浏览器结果见 [验证记录](../process/m1-http-query-validation.md)。B签到、状态更新、提醒和违约仍未实现；本批不新增B权限/通知或派发器。原锁/状态协议继续有效，最终说明书由用户在A全部完成后转交，未记作B已评审。
+
+## 8. A个人提交与边界重核（本轮脚本及三项页面验收已完成）
+
+任务书已逐页重读，A/B不是原文自带拆分，见[M1-A边界](../requirements/m1-a-boundary.md)。本次只新增A个人提交、同键恢复、本人单条读取及安全/测试；不新增B签到/提醒/违约/运营，不实现M2审批/M3工单。
+
+ReservationStore.createValidated(intent,key,authorize,validateNew)在相同用户/教室锁和REQUIRES_NEW事务内先执行在线鉴权、再处理旧请求，只给新请求做D/开放验证及最终时间/个人占用检查。三表仍使用原V1，CONFIRMED和PENDING含义未改，没增加通用状态更新或事件派发器。findForRequest只供A本人恢复，不是B运营接口。
+
+[隔离接口](../../contracts/m1-reservation-demo-api.md)和[验证/操作](../process/m1-reservation-submit-validation.md)描述实际行为。A记录/锁协议可供B后续接入，B的签到窗口、超时取消原子性、通知/违约等仍由B阶段决定实现；说明书待A全部完成后由用户转交，未记作B已接收或同意。
