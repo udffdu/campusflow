@@ -1,6 +1,6 @@
 {
   "register_status": "partial_draft",
-  "coverage_note": "已登记M1需求和用户决策；CF-M1-002/003/004部分实现，个人预约PG存储、事务锁及幂等已有本地验证；鉴权、完整可用性与M2/M3集成等仍未完成。M1-B交接按用户要求延后至A完成。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
+  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004部分实现，个人预约PG存储、事务锁、幂等及内部开放/个人占用查询已有本地验证；真实鉴权、完整可用性与M2/M3集成等仍未完成。M1-B交接按用户要求延后至A完成。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
   "requirements": [
     {
       "id": "CF-M2-001",
@@ -271,15 +271,24 @@
       "module": "M1",
       "title": "有权限的可预约座位搜索",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "responsibility": "A",
       "acceptance": [
         "指定时段的结果仅包含权限范围内、完整时段开放且基础有效的座位，排除有效个人预约、M2占用和M3维修限制",
         "支持按教室与经评审的插座属性筛选；无结果与服务不可用有明确区分",
         "直接调用接口也执行院系及业务权限校验，不依赖前端隐藏"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/seats/src/main/java/io/campusflow/seats/SeatAvailabilityQuery.java",
+        "services/seats/src/main/java/io/campusflow/seats/OpeningSchedule.java",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java"
+      ],
+      "verification": [
+        "services/seats/src/test/java/io/campusflow/seats/SeatAvailabilityQueryTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/OpeningScheduleTest.java",
+        "scripts/check_m1_core_mutations.py",
+        "docs/process/m1-availability-validation.md"
+      ]
     },
     {
       "id": "CF-M1-002",
@@ -295,11 +304,14 @@
       ],
       "implementation": [
         "services/seats/src/main/java/io/campusflow/seats/ReservationPolicy.java",
-        "services/seats/src/main/java/io/campusflow/seats/TimeRange.java"
+        "services/seats/src/main/java/io/campusflow/seats/TimeRange.java",
+        "services/seats/src/main/java/io/campusflow/seats/OpeningSchedule.java"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/ReservationRulesTest.java",
-        "docs/process/m1-core-validation.md"
+        "docs/process/m1-core-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/OpeningScheduleTest.java",
+        "docs/process/m1-availability-validation.md"
       ]
     },
     {

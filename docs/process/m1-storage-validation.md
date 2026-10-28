@@ -2,6 +2,8 @@
 
 日期：2026-10-28。AI完成本地验证；用户随后提供了独立复验成功的输出，范围见下方记录。远程CI、成员评审与部署均未完成。设计依据见 [存储方案](../architecture/m1-storage.md)。
 
+后续更新：内部开放/个人占用读取已新增，完整本地测试增至80、隔离破坏实验增至六项，见 [查询验证记录](m1-availability-validation.md)。下文43测试和三项实验为原存储阶段的历史证据，不替代新增查询的人工验收。
+
 ## 本轮实现
 
 - M1自有m1 schema，V1迁移包含reservations、reservation_requests、outbox_events。用Flyway管理迁移，不访问D表。

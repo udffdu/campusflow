@@ -118,11 +118,13 @@
     "review": "docs/process/m1-review.md",
     "handoff": "docs/handoffs/m1-b.md",
     "storage_design": "docs/architecture/m1-storage.md",
-    "storage_validation": "docs/process/m1-storage-validation.md"
+    "storage_validation": "docs/process/m1-storage-validation.md",
+    "availability_plan": "docs/architecture/m1-availability-plan.md",
+    "availability_validation": "docs/process/m1-availability-validation.md"
   },
   "delivery": {
     "implemented": false,
-    "human_acceptance": "core_and_store_local_build_test_reproduced_by_user",
+    "human_acceptance": "core_store_and_internal_query_local_build_test_reproduced_by_user",
     "peer_review": "not_performed; M1-B handoff deferred by user",
     "remote_ci": "not_run",
     "core_rules": "implemented_and_locally_tested",
@@ -142,6 +144,58 @@
       "full_m1_acceptance": false,
       "peer_review_completed": false,
       "record": "docs/process/m1-storage-validation.md"
+    },
+    "availability_query": {
+      "status": "internal_partial_calculation_implemented_and_locally_tested",
+      "full_availability_api_implemented": false,
+      "human_verification": {
+        "reported_by": "leafwhisper286",
+        "reported_finished_at": "2026-10-28T14:20:20+08:00",
+        "elapsed_seconds": 3.113,
+        "tests": 80,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "build": "SUCCESS",
+        "evidence": "用户提供Maven verify结果",
+        "scope": "本地核心、存储及内部查询构建/测试复验",
+        "source_review_completed": false,
+        "full_m1_acceptance": false,
+        "peer_review_completed": false,
+        "record": "docs/process/m1-availability-validation.md"
+      },
+      "local_tests": {
+        "total": 80,
+        "original": 43,
+        "new_opening": 17,
+        "new_pg_query": 20,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "finished_at": "2026-10-28T14:02:51+08:00"
+      },
+      "mutation_experiments": {
+        "total": 6,
+        "all_detected": true,
+        "original_java_source_unchanged": true
+      },
+      "record": "docs/process/m1-availability-validation.md",
+      "pending": [
+        "D身份和业务权限/访问范围/主数据适配",
+        "插座语义",
+        "跨午夜开放表示",
+        "M2/M3占用",
+        "HTTP与页面",
+        "创建时完整条件校验"
+      ]
     }
+  },
+  "availability_stage": {
+    "scope": "M1内部开放计算和个人预约只读占用查询，分阶段接入",
+    "plan": "docs/architecture/m1-availability-plan.md",
+    "confirmed_by": "leafwhisper286",
+    "confirmed_at": "2026-10-28",
+    "evidence": "用户回复：我同意",
+    "affected_d_m2_m3_review_replaced": false
   }
 }

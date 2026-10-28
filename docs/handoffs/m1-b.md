@@ -42,13 +42,15 @@ leafwhisper286 已明确承担 M1-A/B 内部共享设计决策，并确认下述
 
 ## 5. 当前可用代码与实施状态
 
-当前范围：`services/seats` 内包含五种状态、时间区间、参数化时间校验，以及真实PostgreSQL预约存储/幂等/事务锁。它尚不启动HTTP服务、不访问D，也没有签到/违约任务。验证见 [核心规则](../process/m1-core-validation.md) 和 [存储及事务锁](../process/m1-storage-validation.md)。
+当前范围：`services/seats` 内包含五种状态、时间区间、参数化时间校验、真实PostgreSQL预约存储/幂等/事务锁，以及内部开放计算和个人占用查询。它尚不启动HTTP服务、不访问D，也没有签到/违约任务。验证见 [核心规则](../process/m1-core-validation.md)、[存储及事务锁](../process/m1-storage-validation.md) 和 [内部查询](../process/m1-availability-validation.md)。
+
+用户已同意 [座位查询方案](../architecture/m1-availability-plan.md) 的分阶段范围，内部查询已实现。它与完整鉴权及 M2/M3 集成有明确边界；查询不占座，终结个人预约也不自动解除外部来源限制。本批80测试已由AI本地运行通过，用户随后报告2026-10-28T14:20:20+08:00独立复验80测试及BUILD SUCCESS，耗时3.113秒。
 
 - `ReservationStatus`：表示用户确认的五种状态，并结合预约区间判断是否阻止一个请求区间。
 - `TimeRange`：不可变非空正区间及相交判断，支持相邻区间衔接。
 - `ReservationPolicy`：注入服务端时钟、提前窗口和单次时长参数，按 Asia/Shanghai 校验整点、过去时间、窗口和时长。
 
-其中“一天按滚动24小时且包含上边界”仍为具体化建议；核心接收参数，不把24小时绑定为用户已最终确认的默认配置。个人预约存储已实现；开放时间、院系、插座、资源有效性及M2/M3限制仍待接入，不能只通过时间校验就宣称座位可预约。
+其中“一天按滚动24小时且包含上边界”仍为具体化建议；核心接收参数，不把24小时绑定为用户已最终确认的默认配置。内部开放计算已实现；真实D授权/主数据适配、插座及M2/M3限制仍待接入，不能只通过时间与个人占用计算就宣称座位完整可预约。
 
 ## 5.1 已实现的存储接口与迁移
 
@@ -69,6 +71,17 @@ V1__reservations.sql属于M1自己的m1 schema，包含预约、创建请求幂�
 暂时失败码STORAGE_UNAVAILABLE用于锁等待超时等可重试故障；USER_TIME_CONFLICT、SEAT_TIME_CONFLICT、IDEMPOTENCY_CONFLICT对应业务冲突。HTTP状态映射尚未实现。
 
 本地验证：24个核心测试+19个真实PG测试通过；三个隔离破坏实验均被检测。尚未验证M2/M3与个人预约同室竞争，不能将本轮个人预约互斥推广成完整跨模块验收。
+
+## 5.2 已实现的内部查询接口
+
+- `OpeningSchedule(List<Interval>)`、`covers(period)`：Interval为星期、分钟级LocalTime开始/结束；完整覆盖才开放，相邻规则可衔接，空规则关闭。跨午夜完整覆盖在D表示约定前不能推断。
+- `ReservationStore.personalOccupancy(userId,roomId,period)`：一条只读SQL返回PersonalOccupancy(userConflict,occupiedSeatIds)，只含个人预约；不泄露他人身份。失败抛STORAGE_UNAVAILABLE，不当作空结果。
+- `SeatAvailabilityQuery(store,policy).query(scope,room,seats,period)`：scope为AccessScope(userId,allowedRoomIds)，room/seats为M1的强类型输入快照；内部结果Result(reason,seats)中的座位仅含id/code，排序稳定。
+- 原因NONE、ROOM_INACTIVE、OUTSIDE_OPENING_HOURS、USER_TIME_CONFLICT。范围外抛SecurityException、快照不一致抛IllegalArgumentException；HTTP映射尚未实现。
+
+AccessScope并不认证会话，也不是前端载荷；未来D适配层须核实真实身份、业务权限、开放范围与资源类型，不能仅凭这个构造器授权。查询复用ReservationPolicy和有效状态，不取占座锁、不写三表；提交仍要重新验证全部条件。现有create尚未组合开放判断或D/M2/M3检查，不能直接暴露为完整预约API。
+
+后续新增17个开放规则测试及20个真实PG查询测试，全部测试80个通过；隔离破坏实验现共六项，均检测预期断言失败，原始源码未变。80测试包含AI本地结果和用户随后独立复验的报告；用户此前43测试的验收仍只覆盖原核心/存储阶段，未挪用为查询验收。
 
 ## 6. A 完成后补齐的交接项
 
