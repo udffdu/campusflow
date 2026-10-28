@@ -9,15 +9,16 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/** All routes are read-only in this phase, including unknown paths. No browser write gateway exists. */
+/** Production stays read-only. Only a test-classpath permit can open the one isolated demo POST. */
 @Component
 public final class QueryBoundary extends OncePerRequestFilter {
     private final ObjectMapper json;
-    public QueryBoundary(ObjectMapper json) { this.json=json; }
+    private final org.springframework.beans.factory.ObjectProvider<DemoWritePermit> permit;
+    public QueryBoundary(ObjectMapper json,org.springframework.beans.factory.ObjectProvider<DemoWritePermit> permit) { this.json=json;this.permit=permit; }
     @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain) throws ServletException,IOException {
         String id=UUID.randomUUID().toString(); request.setAttribute("m1.requestId",id);
         response.setHeader("X-Request-ID",id); response.setHeader("Cache-Control","no-store");
-        if(!request.getMethod().equals("GET")) {
+        if(!request.getMethod().equals("GET") && !(request.getMethod().equals("POST") && request.getRequestURI().equals("/api/m1/v1/reservations") && permit.getIfAvailable()!=null)) {
             response.setStatus(405); response.setHeader("Allow","GET"); response.setContentType("application/json");
             json.writeValue(response.getOutputStream(),Map.of("code","READ_ONLY","message","当前仅支持查询，预约暂未开放","requestId",id));
             return;

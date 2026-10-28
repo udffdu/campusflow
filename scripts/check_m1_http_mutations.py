@@ -5,10 +5,10 @@ import check_m1_core_mutations as runner
 TEST = 'io.campusflow.seats.http.QueryHttpTest'
 runner.MUTATIONS = [
     ('ignore_online_deny', 'http/DQueryClient.java',
-     'if (!allowed) throw new QueryProblem(403', 'if (false) throw new QueryProblem(403',
+     'if (!allowed && requireAllowed) throw new QueryProblem(403', 'if (false) throw new QueryProblem(403',
      'explicitDenyCannotBeOverriddenByPermissionSnapshot', TEST+'#explicitDenyCannotBeOverriddenByPermissionSnapshot'),
     ('trust_permissionless_identity', 'http/DQueryClient.java',
-     'if (!permissions.contains(PERMISSION))', 'if (false)',
+     'if (allowed && !permissions.contains(permission))', 'if (false)',
      'trueWithoutRequiredPermissionFailsClosed', TEST+'#trueWithoutRequiredPermissionFailsClosed'),
     ('upstream_error_logs_user_out', 'http/DQueryClient.java',
      'if (response.statusCode()!=200) throw QueryProblem.upstream();',

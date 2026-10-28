@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.springframework.dao.DataAccessException;
@@ -48,6 +49,15 @@ public final class ReservationStore {
 
     public ReservationRecord create(CreateReservation request, String idempotencyKey) {
         Objects.requireNonNull(request, "request");
+        return createValidated(new ReservationIntent(request.userId(),request.roomId(),request.seatId(),request.period()),
+                idempotencyKey, () -> {}, request::resourceVersion).reservation();
+    }
+
+    public record CreationResult(ReservationRecord reservation,boolean replayed) {}
+
+    /** Authorization runs under the locks even on replay; fresh metadata validation runs only on new requests. */
+    public CreationResult createValidated(ReservationIntent request,String idempotencyKey,Runnable authorize,LongSupplier validateNew) {
+        Objects.requireNonNull(request);Objects.requireNonNull(authorize);Objects.requireNonNull(validateNew);
         if (idempotencyKey == null || !idempotencyKey.matches("[A-Za-z0-9._:-]{1,128}")) {
             throw new IllegalArgumentException("Invalid idempotency key");
         }
@@ -57,6 +67,7 @@ public final class ReservationStore {
                 jdbc.queryForObject("select set_config('lock_timeout', ?, true)", String.class,
                         lockTimeoutMillis + "ms");
                 locks.lockUserAndRoom(request.userId(), request.roomId());
+                authorize.run();
                 var previous = jdbc.query("select request_hash, reservation_id from m1.reservation_requests "
                                 + "where user_id=? and idempotency_key=?",
                         (row, index) -> new PriorRequest(row.getString(1), row.getObject(2, UUID.class)),
@@ -64,8 +75,10 @@ public final class ReservationStore {
                 if (!previous.isEmpty()) {
                     var prior = previous.getFirst();
                     if (!prior.hash().equals(hash)) throw new ReservationPersistenceException(IDEMPOTENCY_CONFLICT);
-                    return findForUser(request.userId(), prior.id()).orElseThrow();
+                    return new CreationResult(findForUser(request.userId(), prior.id()).orElseThrow(),true);
                 }
+                long resourceVersion=validateNew.getAsLong();
+                if(resourceVersion<1)throw new IllegalArgumentException("Invalid trusted resource version");
                 policy.validate(request.period());
                 if (conflicts("user_id", request.userId(), request.period())) {
                     throw new ReservationPersistenceException(USER_TIME_CONFLICT);
@@ -81,7 +94,7 @@ public final class ReservationStore {
                         values (?,?,?,?,?,?,'CONFIRMED','M1',?,1,?,?)
                         """, id, request.userId(), request.roomId(), request.seatId(),
                         Timestamp.from(request.period().startAt()), Timestamp.from(request.period().endAt()),
-                        request.resourceVersion(), Timestamp.from(createdAt), Timestamp.from(createdAt));
+                        resourceVersion, Timestamp.from(createdAt), Timestamp.from(createdAt));
                 jdbc.update("insert into m1.reservation_requests values (?,?,?,?)",
                         request.userId(), idempotencyKey, hash, id);
                 jdbc.update("""
@@ -92,7 +105,7 @@ public final class ReservationStore {
                         """, UUID.randomUUID(), id, id.toString(), request.userId().toString(),
                         request.roomId().toString(), request.seatId().toString(),
                         request.period().startAt().toString(), request.period().endAt().toString(), Timestamp.from(createdAt));
-                return findForUser(request.userId(), id).orElseThrow();
+                return new CreationResult(findForUser(request.userId(), id).orElseThrow(),false);
             });
         } catch (DataAccessException exception) {
             for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
@@ -109,6 +122,11 @@ public final class ReservationStore {
     public Optional<ReservationRecord> findForUser(UUID userId, UUID reservationId) {
         return jdbc.query("select * from m1.reservations where user_id=? and id=?", ReservationStore::map,
                 userId, reservationId).stream().findFirst();
+    }
+
+    public Optional<ReservationRecord> findForRequest(UUID userId,String key) {
+        return jdbc.query("select r.* from m1.reservations r join m1.reservation_requests q on r.id=q.reservation_id "
+                +"where q.user_id=? and q.idempotency_key=? and r.user_id=?",ReservationStore::map,userId,key,userId).stream().findFirst();
     }
 
     /**
@@ -158,7 +176,7 @@ public final class ReservationStore {
                 row.getLong("resource_version"), row.getLong("version"), row.getTimestamp("created_at").toInstant());
     }
 
-    private static String requestHash(CreateReservation request) {
+    private static String requestHash(ReservationIntent request) {
         String canonical = request.userId() + "\n" + request.roomId() + "\n" + request.seatId() + "\n"
                 + request.period().startAt() + "\n" + request.period().endAt();
         try {

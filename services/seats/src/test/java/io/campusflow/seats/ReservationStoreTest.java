@@ -226,6 +226,15 @@ class ReservationStoreTest {
         assertCounts(0, 0, 0);
     }
 
+    @Test void validatedCreateRechecksTimeAfterExternalValidation() {
+        var now=new java.util.concurrent.atomic.AtomicReference<>(CLOCK.instant());
+        Clock moving=new Clock(){public java.time.ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(java.time.ZoneId zone){return this;}public Instant instant(){return now.get();}};
+        var validated=store(moving,Duration.ofSeconds(2));var request=request();
+        var error=assertThrows(ReservationRuleException.class,()->validated.createValidated(
+                new ReservationIntent(user,room,seat,request.period()),"clock-after-network",()->{},()->{now.set(request.period().startAt().plusSeconds(1));return 7;}));
+        assertEquals(ReservationRuleException.Code.IN_PAST,error.code());assertCounts(0,0,0);
+    }
+
     private Outcome independentCreate(CreateReservation request, String key) {
         try {
             return new Outcome(store(CLOCK, Duration.ofSeconds(2)).create(request, key).id(), null);

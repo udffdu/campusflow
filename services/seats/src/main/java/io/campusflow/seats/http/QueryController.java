@@ -45,7 +45,7 @@ public final class QueryController {
     private static <T> List<T> slice(List<T> list,int page,int size) {
         int from=(int)Math.min((long)page*size,list.size()); return list.subList(from,Math.min(from+size,list.size()));
     }
-    private static String session(HttpServletRequest request) {
+    static String session(HttpServletRequest request) {
         String session=null;
         if(request.getCookies()!=null) for(Cookie c:request.getCookies()) if(c.getName().equals("CF_SESSION")) {
             if(session!=null) throw new QueryProblem(401,"SESSION_REQUIRED","请重新登录"); session=c.getValue();

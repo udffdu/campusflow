@@ -13,9 +13,10 @@ public final class HttpFixture {
     public static void main(String[] args) throws Exception {
         try(var pg=EmbeddedPostgres.builder().setPort(0).setServerConfig("listen_addresses","127.0.0.1").start()) {
             var app=new SpringApplication(SeatsApplication.class);
+            if("true".equals(System.getenv("M1_PERSONAL_DEMO")))app.addPrimarySources(List.of(io.campusflow.seats.http.DemoFixtureConfiguration.class));
             try(var context=app.run("--spring.datasource.url="+pg.getJdbcUrl("postgres","postgres"),
                     "--spring.datasource.username=postgres","--spring.datasource.password=",
-                    "--logging.level.root=WARN","--spring.main.banner-mode=off")) {
+                    "--server.address=127.0.0.1","--logging.level.root=WARN","--spring.main.banner-mode=off")) {
                 System.out.println("FIXTURE_READY");System.out.flush();
                 var json=new ObjectMapper();var input=new BufferedReader(new InputStreamReader(System.in));String line;
                 while((line=input.readLine())!=null && !line.equals("STOP")) {

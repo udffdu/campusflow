@@ -44,12 +44,15 @@ public final class DQueryClient {
         private final long deadline;
         private Call(long deadline) { this.deadline=deadline; }
 
-        public ReservationAccessPolicy.IdentitySnapshot identity(String session) {
+        public ReservationAccessPolicy.IdentitySnapshot identity(String session) { return identity(session,PERMISSION,true); }
+        public ReservationAccessPolicy.IdentitySnapshot identity(String session,ReservationAccessPolicy.Action action) { return identity(session,action.permission(),true); }
+        public ReservationAccessPolicy.IdentitySnapshot currentIdentity(String session) { return identity(session,PERMISSION,false); }
+        private ReservationAccessPolicy.IdentitySnapshot identity(String session,String permission,boolean requireAllowed) {
             if (session==null || !session.matches("[A-Za-z0-9_-]{43}"))
                 throw new QueryProblem(401,"SESSION_REQUIRED","请重新登录");
             try {
                 JsonNode auth=request("/internal/v1/authorization", json.writeValueAsBytes(
-                        Map.of("sessionToken",session,"permission",PERMISSION)),false);
+                        Map.of("sessionToken",session,"permission",permission)),false);
                 boolean allowed=bool(auth,"allowed");
                 JsonNode identity=auth.get("identity");
                 if (identity==null || identity.isNull()) {
@@ -59,8 +62,8 @@ public final class DQueryClient {
                 UUID user=id(identity,"id");
                 if (!bool(identity,"active")) throw QueryProblem.upstream();
                 Set<String> permissions=strings(identity,"permissions");
-                if (!allowed) throw new QueryProblem(403,"FORBIDDEN","缺少座位查询权限");
-                if (!permissions.contains(PERMISSION)) throw QueryProblem.upstream();
+                if (!allowed && requireAllowed) throw new QueryProblem(403,"FORBIDDEN","缺少座位查询权限");
+                if (allowed && !permissions.contains(permission)) throw QueryProblem.upstream();
                 if (identity.path("departmentId").isNull())
                     throw new QueryProblem(403,"FORBIDDEN","座位查询需要有效的所属院系");
                 return new ReservationAccessPolicy.IdentitySnapshot(user,id(identity,"departmentId"),permissions);
@@ -75,6 +78,12 @@ public final class DQueryClient {
             if (!room.id().equals(id)) throw QueryProblem.upstream();
             if (!room.type().equals("ROOM")) throw new QueryProblem(404,"ROOM_NOT_FOUND","教室不存在");
             return room;
+        }
+        public Resource seat(UUID id) {
+            JsonNode raw=request("/internal/v1/resources/"+id,null,true);
+            if(!id(raw,"id").equals(id))throw QueryProblem.upstream();
+            if(!text(raw,"type").equals("SEAT"))throw new QueryProblem(404,"SEAT_NOT_FOUND","座位不存在");
+            return resource(raw);
         }
         public List<Resource> resources(String type, UUID parent) {
             List<Resource> result=new ArrayList<>(); Set<UUID> seen=new HashSet<>(); long total=-1;
@@ -134,13 +143,14 @@ public final class DQueryClient {
             for (JsonNode h:array(value,"openingHours")) hours.add(new OpeningSchedule.Interval(
                     DayOfWeek.of(Math.toIntExact(number(h,"day"))),LocalTime.parse(text(h,"start")),LocalTime.parse(text(h,"end"))));
             var schedule=new OpeningSchedule(hours);
+            long version=number(value,"version");if(version<1)throw QueryProblem.upstream();
             var scope=type.equals("ROOM")?ReservationAccessPolicy.BookingScope.valueOf(text(value,"bookingScope")):null;
-            return new Resource(id,type,parent,dept,code,name,effective,scope,schedule,value.get("openingHours").deepCopy(),features);
+            return new Resource(id,type,parent,dept,code,name,effective,scope,schedule,value.get("openingHours").deepCopy(),features,version);
         } catch (Exception e) { throw QueryProblem.upstream(); }
     }
     public record Resource(UUID id,String type,UUID parentId,UUID departmentId,String code,String name,
             boolean effectiveActive,ReservationAccessPolicy.BookingScope scope,OpeningSchedule schedule,
-            JsonNode hours,Set<String> features) {
+            JsonNode hours,Set<String> features,long version) {
         SeatAvailabilityQuery.RoomSnapshot room() {
             return new SeatAvailabilityQuery.RoomSnapshot(id,departmentId,effectiveActive,schedule,scope);
         }

@@ -29,7 +29,8 @@ class QueryHttpTest {
     private EmbeddedPostgres pg;
     private HttpServer upstream;
     private ExecutorService workers;
-    private ServletWebServerApplicationContext app;
+    private ServletWebServerApplicationContext app,demoApp;
+    private String demoBase;
     private String base;
     private HttpClient http;
     private volatile Function<HttpExchange,Reply> responder;
@@ -53,8 +54,15 @@ class QueryHttpTest {
                 "--m1.max-advance=PT24H","--m1.max-duration=PT4H","--m1.connect-timeout=PT0.2S",
                 "--m1.read-timeout=PT0.6S","--m1.call-budget=PT1S","--m1.max-pages=3");
         base="http://127.0.0.1:"+app.getWebServer().getPort();http=HttpClient.newHttpClient();
+        demoApp=(ServletWebServerApplicationContext)new SpringApplication(SeatsApplication.class,DemoFixtureConfiguration.class).run(
+                "--server.port=0","--spring.datasource.url="+pg.getJdbcUrl("postgres","postgres"),"--spring.datasource.username=postgres",
+                "--m1.d-base-url=http://127.0.0.1:"+upstream.getAddress().getPort(),"--m1.service-key="+KEY,
+                "--m1.max-advance=PT24H","--m1.max-duration=PT4H","--m1.connect-timeout=PT0.2S",
+                "--m1.read-timeout=PT0.6S","--m1.call-budget=PT1S","--m1.max-pages=3",
+                "--M1_DEMO_ORIGIN=http://127.0.0.1:5274","--M1_DEMO_CSRF_SECRET="+Base64.getEncoder().encodeToString(new byte[32]));
+        demoBase="http://127.0.0.1:"+demoApp.getWebServer().getPort();
     }
-    @AfterAll void stop() throws Exception {if(app!=null)app.close();if(pg!=null)pg.close();if(upstream!=null)upstream.stop(0);if(workers!=null)workers.shutdownNow();}
+    @AfterAll void stop() throws Exception {if(demoApp!=null)demoApp.close();if(app!=null)app.close();if(pg!=null)pg.close();if(upstream!=null)upstream.stop(0);if(workers!=null)workers.shutdownNow();}
     @BeforeEach void reset() {
         calls.clear();responder=this::normal;
         new JdbcTemplate(pg.getPostgresDatabase()).execute("truncate m1.outbox_events,m1.reservation_requests,m1.reservations");
@@ -66,7 +74,7 @@ class QueryHttpTest {
         Map<String,Object> r=new HashMap<>(Map.of("id",id,"type",type,"parentId",type.equals("SEAT")?room:UUID.randomUUID(),
                 "departmentId",department,"code",type.equals("SEAT")?"S01":"R01","name","测试资源",
                 "effectiveActive",active,"active",active,"features",features,"openingHours",List.of(Map.of("day",period().startAt().atZone(ZoneId.of("Asia/Shanghai")).getDayOfWeek().getValue(),"start","00:00","end","23:59"))));
-        if(scope!=null)r.put("bookingScope",scope);return r;
+        if(scope!=null)r.put("bookingScope",scope);r.put("version",1);return r;
     }
     private Object roomResource(){return resource(room,"ROOM",dept,"DEPARTMENT",Set.of(),true);}
     private Object seatResource(){return resource(seat,"SEAT",dept,null,Set.of("POWER_OUTLET"),true);}
@@ -74,10 +82,11 @@ class QueryHttpTest {
     private Reply normal(HttpExchange e) {
         String path=e.getRequestURI().getPath();
         if(path.endsWith("authorization")){
-            try {JsonNode input=json.readTree(e.getRequestBody());assertEquals(DQueryClient.PERMISSION,input.path("permission").asText());assertEquals(TOKEN,input.path("sessionToken").asText());}catch(Exception ex){throw new RuntimeException(ex);}
-            return new Reply(identity(true,Set.of(DQueryClient.PERMISSION)));
+            try {JsonNode input=json.readTree(e.getRequestBody());assertTrue(Set.of("seats.availability.read","seats.reservations.create","seats.reservations.read.own").contains(input.path("permission").asText()));assertEquals(TOKEN,input.path("sessionToken").asText());}catch(Exception ex){throw new RuntimeException(ex);}
+            return new Reply(identity(true,Set.of(DQueryClient.PERMISSION,"seats.reservations.create","seats.reservations.read.own")));
         }
         if(path.endsWith(room.toString()))return new Reply(roomResource());
+        if(path.endsWith(seat.toString()))return new Reply(seatResource());
         if(e.getRequestURI().getQuery().contains("type=ROOM"))return new Reply(page(List.of(roomResource()),0,1));
         return new Reply(page(List.of(seatResource()),0,1));
     }
@@ -131,4 +140,68 @@ class QueryHttpTest {
     @ParameterizedTest @ValueSource(strings={"&userId=forged","&page=0&page=1","&requiresPower=1","&size=101","&page=-1","&startAt=bad","&roomId=bad"}) void untrustedParametersAre400(String suffix)throws Exception {assertEquals(400,get(query()+suffix,true).statusCode());assertTrue(calls.isEmpty());}
     @Test void localOffsetsAndNonWholeHoursAreRejected()throws Exception {assertEquals(400,get(query().replace(period().startAt().toString(),period().startAt().plusSeconds(60).toString()),true).statusCode());assertEquals(400,get(query().replace("Z","%2B00:00"),true).statusCode());}
     @Test void writesAreDeniedOnEveryPathWithoutCreatingAnything()throws Exception {for(String method:List.of("POST","PUT","PATCH","DELETE")){var r=http.send(HttpRequest.newBuilder(URI.create(base+"/api/m1/v1/reservations")).method(method,HttpRequest.BodyPublishers.ofString("{} ")).build(),HttpResponse.BodyHandlers.ofString());assertEquals(405,r.statusCode());}counts(0);assertTrue(calls.isEmpty());}
+    private String csrf()throws Exception {return body(http.send(HttpRequest.newBuilder(URI.create(demoBase+"/api/m1/v1/csrf")).header("Cookie","CF_SESSION="+TOKEN).GET().build(),HttpResponse.BodyHandlers.ofString())).path("token").asText();}
+    private Map<String,Object> intent(){return Map.of("roomId",room,"seatId",seat,"startAt",period().startAt().toString(),"endAt",period().endAt().toString());}
+    private HttpResponse<String> post(Object input,String key,String token,String origin)throws Exception {
+        var builder=HttpRequest.newBuilder(URI.create(demoBase+"/api/m1/v1/reservations")).header("Cookie","CF_SESSION="+TOKEN).header("Content-Type","application/json");
+        if(key!=null)builder.header("Idempotency-Key",key);if(token!=null)builder.header("X-M1-CSRF-Token",token);if(origin!=null)builder.header("Origin",origin);
+        return http.send(builder.POST(HttpRequest.BodyPublishers.ofString(input instanceof String raw?raw:json.writeValueAsString(input))).build(),HttpResponse.BodyHandlers.ofString());
+    }
+    private HttpResponse<String> demoGet(String path)throws Exception{return http.send(HttpRequest.newBuilder(URI.create(demoBase+path)).header("Cookie","CF_SESSION="+TOKEN).GET().build(),HttpResponse.BodyHandlers.ofString());}
+    @Test void demoCreatesAndReplaysExactlyOneReservationAndEvent()throws Exception {
+        String token=csrf();var input=intent();var created=post(input,"demo-create",token,"http://127.0.0.1:5274");assertEquals(201,created.statusCode(),created.body());counts(1);
+        var replay=post(input,"demo-create",token,"http://127.0.0.1:5274");assertEquals(200,replay.statusCode(),replay.body());assertTrue(body(replay).path("replayed").asBoolean());
+        assertEquals(body(created).path("id"),body(replay).path("id"));assertEquals("PERSONAL_DEMO",body(created).path("stage").asText());assertFalse(body(created).path("productionReady").asBoolean(true));counts(1);
+        assertEquals(200,demoGet("/api/m1/v1/reservations/"+body(created).path("id").asText()).statusCode());assertEquals(body(created).path("id"),body(demoGet("/api/m1/v1/reservation-requests/demo-create")).path("id"));
+    }
+    @Test void replaySkipsLaterResourceDisableAndPastTimeValidation()throws Exception {
+        String token=csrf();var input=intent();var created=post(input,"repeat",token,"http://127.0.0.1:5274");assertEquals(201,created.statusCode());
+        responder=e->e.getRequestURI().getPath().endsWith("authorization")?normal(e):new Reply(503,Map.of(),0);
+        assertEquals(200,post(input,"repeat",token,"http://127.0.0.1:5274").statusCode());counts(1);
+        Instant earlier=Instant.now().minusSeconds(7200).truncatedTo(java.time.temporal.ChronoUnit.HOURS);var past=new TimeRange(earlier,earlier.plusSeconds(3600));
+        var pastStore=new ReservationStore(pg.getPostgresDatabase(),new ReservationPolicy(Duration.ofHours(24),Duration.ofHours(4),Clock.fixed(earlier.minusSeconds(60),ZoneOffset.UTC)),Clock.systemUTC(),Duration.ofSeconds(1));
+        pastStore.create(new CreateReservation(user,room,seat,past,1),"past");
+        assertEquals(200,post(Map.of("roomId",room,"seatId",seat,"startAt",past.startAt().toString(),"endAt",past.endAt().toString()),"past",token,"http://127.0.0.1:5274").statusCode());counts(2);
+    }
+    @Test void sameKeyDifferentIntentIs409WithoutMutatingOriginal()throws Exception {
+        String token=csrf();assertEquals(201,post(intent(),"same",token,"http://127.0.0.1:5274").statusCode());var changed=new HashMap<>(intent());changed.put("seatId",other);
+        assertEquals(409,post(changed,"same",token,"http://127.0.0.1:5274").statusCode());counts(1);
+    }
+    @Test void csrfAndOriginFailuresDoNotReachDatabase()throws Exception {
+        String token=csrf();assertEquals(403,post(intent(),"csrf",null,"http://127.0.0.1:5274").statusCode());assertEquals(403,post(intent(),"csrf",token,null).statusCode());assertEquals(403,post(intent(),"csrf",token,"http://evil.invalid").statusCode());
+        assertEquals(403,post(intent(),"csrf",token.replaceFirst("[0-9]","0"),"http://127.0.0.1:5274").statusCode());counts(0);
+    }
+    @Test void createDoesNotUseQueryPermissionAsAuthorization()throws Exception {
+        String token=csrf();responder=e->e.getRequestURI().getPath().endsWith("authorization")?new Reply(identity(false,Set.of(DQueryClient.PERMISSION))):normal(e);
+        assertEquals(403,post(intent(),"query-only",token,"http://127.0.0.1:5274").statusCode());counts(0);
+    }
+    @Test void lockedAuthorizationRevocationPreventsCreation()throws Exception {
+        String token=csrf();var count=new java.util.concurrent.atomic.AtomicInteger();responder=e->e.getRequestURI().getPath().endsWith("authorization")&&count.incrementAndGet()==2?new Reply(identity(false,Set.of(DQueryClient.PERMISSION))):normal(e);
+        assertEquals(403,post(intent(),"revoke",token,"http://127.0.0.1:5274").statusCode());counts(0);
+    }
+    @Test void onlyCreatePermissionCanCreateButCannotUseReadEndpoints()throws Exception {
+        String token=csrf();responder=e->{if(!e.getRequestURI().getPath().endsWith("authorization"))return normal(e);try{var input=json.readTree(e.getRequestBody());return new Reply(identity(input.path("permission").asText().equals("seats.reservations.create"),Set.of("seats.reservations.create")));}catch(Exception x){throw new RuntimeException(x);}};
+        var created=post(intent(),"create-only",token,"http://127.0.0.1:5274");assertEquals(201,created.statusCode(),created.body());assertEquals(403,demoGet("/api/m1/v1/reservations/"+body(created).path("id").asText()).statusCode());counts(1);
+    }
+    @Test void ownReadsHideOtherUsersRecordsAndKeys()throws Exception {
+        var record=app.getBean(ReservationStore.class).create(new CreateReservation(other,room,seat,period(),1),"other-private");
+        assertEquals(404,demoGet("/api/m1/v1/reservations/"+record.id()).statusCode());assertEquals(404,demoGet("/api/m1/v1/reservation-requests/other-private").statusCode());counts(1);
+    }
+    @Test void changedResourceOrBadVersionRollsBackNewRequest()throws Exception {
+        String token=csrf();responder=e->e.getRequestURI().getPath().endsWith(room.toString())?new Reply(resource(room,"ROOM",dept,"DEPARTMENT",Set.of(),false)):normal(e);
+        assertEquals(409,post(intent(),"disabled",token,"http://127.0.0.1:5274").statusCode());counts(0);
+        responder=e->{if(!e.getRequestURI().getPath().endsWith(room.toString()))return normal(e);var r=resource(room,"ROOM",dept,"DEPARTMENT",Set.of(),true);r.put("version",0);return new Reply(r);};
+        assertEquals(503,post(intent(),"version",token,"http://127.0.0.1:5274").statusCode());counts(0);
+    }
+    @Test void duplicateFieldsAndForgedIdentityAreRejected()throws Exception {
+        String token=csrf();var input=new HashMap<>(intent());input.put("userId",other);assertEquals(400,post(input,"forged",token,"http://127.0.0.1:5274").statusCode());
+        String raw=json.writeValueAsString(intent());raw=raw.substring(0,raw.length()-1)+",\"roomId\":\""+room+"\"}";
+        assertEquals(400,post(raw,"duplicate",token,"http://127.0.0.1:5274").statusCode());assertEquals(400,post(intent(),null,token,"http://127.0.0.1:5274").statusCode());counts(0);
+    }
+    @Test void capabilitiesDistinguishProductionFromIsolatedDemo()throws Exception {
+        assertFalse(body(get("/api/m1/v1/reservation-capabilities",true)).path("canCreateDemoReservation").asBoolean(true));
+        assertTrue(body(demoGet("/api/m1/v1/reservation-capabilities")).path("canCreateDemoReservation").asBoolean());
+        assertEquals(404,get("/api/m1/v1/csrf",true).statusCode());counts(0);
+    }
+
 }

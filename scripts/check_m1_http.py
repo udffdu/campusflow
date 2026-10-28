@@ -101,8 +101,8 @@ class BrowserHTTP:
         self.jar = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(self.jar))
 
-    def request(self, path, method='GET', body=None, status=200, base=None, cookie=None):
-        headers = {}
+    def request(self, path, method='GET', body=None, status=200, base=None, cookie=None, headers=None):
+        headers = dict(headers or {})
         if method != 'GET' and path.startswith('/api/v1/'):
             _, csrf = self.request('/api/v1/auth/csrf')
             headers['X-XSRF-TOKEN'] = csrf['token']

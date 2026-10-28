@@ -71,7 +71,9 @@ jobs:
       - name: Prepare separate D and M1 test processes
         run: bash scripts/prepare-m1-http.sh
       - name: Verify actual D and M1 HTTP calls and independent PostgreSQL
-        run: python3 scripts/check_m1_http.py
+        run: |
+          python3 scripts/check_m1_http.py
+          python3 scripts/check_m1_submit.py
   web-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
