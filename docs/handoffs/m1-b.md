@@ -70,7 +70,7 @@ V1__reservations.sql属于M1自己的m1 schema，包含预约、创建请求幂�
 
 每次create同时保存RESERVATION_CREATED待发事件，状态PENDING；尚无派发器或D投递回执。超时取消/违约等B操作需要后续统一事务入口，不能把现有create当作任意状态更新方法。create使用REQUIRES_NEW，不能假定受外层事务回滚控制。
 
-暂时失败码STORAGE_UNAVAILABLE用于锁等待超时等可重试故障；USER_TIME_CONFLICT、SEAT_TIME_CONFLICT、IDEMPOTENCY_CONFLICT对应业务冲突。HTTP状态映射尚未实现。
+暂时失败码STORAGE_UNAVAILABLE用于锁等待超时等可重试故障；USER_TIME_CONFLICT、SEAT_TIME_CONFLICT、IDEMPOTENCY_CONFLICT对应业务冲突。这些创建/冲突码尚未暴露为创建HTTP；本批仅新增查询HTTP。
 
 本地验证：24个核心测试+19个真实PG测试通过；三个隔离破坏实验均被检测。尚未验证M2/M3与个人预约同室竞争，不能将本轮个人预约互斥推广成完整跨模块验收。
 
@@ -79,9 +79,9 @@ V1__reservations.sql属于M1自己的m1 schema，包含预约、创建请求幂�
 - `OpeningSchedule(List<Interval>)`、`covers(period)`：Interval为星期、分钟级LocalTime开始/结束；完整覆盖才开放，相邻规则可衔接，空规则关闭。跨午夜完整覆盖在D表示约定前不能推断。
 - `ReservationStore.personalOccupancy(userId,roomId,period)`：一条只读SQL返回PersonalOccupancy(userConflict,occupiedSeatIds)，只含个人预约；不泄露他人身份。失败抛STORAGE_UNAVAILABLE，不当作空结果。
 - `SeatAvailabilityQuery(store,policy).query(scope,room,seats,period)`：scope为AccessScope(userId,allowedRoomIds)，room/seats为M1的强类型输入快照；内部结果Result(reason,seats)中的座位仅含id/code，排序稳定。
-- 原因NONE、ROOM_INACTIVE、OUTSIDE_OPENING_HOURS、USER_TIME_CONFLICT。范围外抛SecurityException、快照不一致抛IllegalArgumentException；HTTP映射尚未实现。
+- 原因NONE、ROOM_INACTIVE、OUTSIDE_OPENING_HOURS、USER_TIME_CONFLICT。范围外抛SecurityException、快照不一致抛IllegalArgumentException；本批查询HTTP将权限越界映射403，上游快照异常503，详见查询契约。
 
-AccessScope并不认证会话，也不是前端载荷；未来D适配层须核实真实身份、业务权限、开放范围与资源类型，不能仅凭这个构造器授权。查询复用ReservationPolicy和有效状态，不取占座锁、不写三表；提交仍要重新验证全部条件。现有create尚未组合开放判断或D/M2/M3检查，不能直接暴露为完整预约API。
+AccessScope并不认证会话，也不是前端载荷；现有HTTP适配层已通过D核实查询身份、权限、范围及类型；未来创建适配仍须重新验证这些事实，不能仅凭这个构造器授权。查询复用ReservationPolicy和有效状态，不取占座锁、不写三表；提交仍要重新验证全部条件。现有create尚未组合开放判断或D/M2/M3检查，不能直接暴露为完整预约API。
 
 后续新增17个开放规则测试及20个真实PG查询测试，全部测试80个通过；隔离破坏实验现共六项，均检测预期断言失败，原始源码未变。80测试包含AI本地结果和用户随后独立复验的报告；用户此前43测试的验收仍只覆盖原核心/存储阶段，未挪用为查询验收。
 
@@ -94,3 +94,9 @@ AccessScope并不认证会话，也不是前端载荷；未来D适配层须核�
 - [ ] 可独立启动的环境命令、虚构样例、测试及迁移验证结果。
 - [ ] M2/M3 联调事实、未完成部分和已知限制。
 - [ ] 用户确认说明书与 A 的实际行为一致后，自行转发 B；不伪造 B 的接收或评审记录。
+
+## 7. 本批只读HTTP补充（脚本和三项页面已复验，A尚未全部完成）
+
+[查询契约](../../contracts/m1-query-api.md)：GET /api/m1/v1/rooms、seat-candidates；Cookie在线D鉴权，候选canReserve=false，不开放写入。M1独立应用仅自己的m1迁移/数据；D/PG不可用503、失效会话401、越权限/范围403。不得把现有ReservationStore.create直接挂HTTP而跳过D/开放/M2/M3/CSRF校验。
+
+隔离环境及真实网络28项、M1123/D24/前端22与浏览器结果见 [验证记录](../process/m1-http-query-validation.md)。B签到、状态更新、提醒和违约仍未实现；本批不新增B权限/通知或派发器。原锁/状态协议继续有效，最终说明书由用户在A全部完成后转交，未记作B已评审。

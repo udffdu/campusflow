@@ -108,3 +108,17 @@ bash "/Users/lily/Documents/Codex/2026-10-22/qin/scripts/check-d-supplement.sh"
 源码移到其他环境时，在Java21和前端依赖就绪后，使用仓库Maven Wrapper分别verify platform/seats，再在apps/web运行npm test和npm run build。外层本机脚本不属于项目Git，也不修改系统Java或Shell配置。
 
 停用对在途/已有预约的生效边界、午夜开放表示、M1 HTTP路由/CSRF、配置归属、最终通知渠道及M2/M3契约仍未决定；没有因为这三项授权而自动批准。本说明会随实际接入继续更新，最终由用户转交相关负责人，不代发消息或伪造回执。
+
+## 9. 只读HTTP阶段新增交接（脚本和三项页面已由用户复验）
+
+用户已确认 [只读HTTP方案](../architecture/m1-http-query-plan.md)，现已实现 [M1查询API](../../contracts/m1-query-api.md) 和Vue /seat-query。浏览器仍向D登录；M1每次以M1服务凭据调用D authorization/resources，自己判断seats.availability.read与DEPARTMENT/CAMPUS，不共享D表或实体。D现有公开契约和生产源码未改；新增的D HttpFixture仅测试classpath，不进生产jar。
+
+前端/api/m1优先转独立M1，/api/v1仍转D。只有SEAT_USER而无spaces.read的用户也能查询并登录到座位页；MEMBER本身只有D目录权限，不能代替SEAT_USER。没有自动给旧用户赋权，演示账号通过公开D API显式建立。
+
+接口候选始终canReserve=false；M2/M3不得把此浏览器接口当作整教室占用承诺。D故障/服务凭据错误为503，不导致学生退出；会话失效401、无权限403、正常空200分开。D分页/必需字段异常不返回部分结果，范围/启停不缓存。
+
+AI本地D24/M1123/前端22、真实TCP28及浏览器通过，六项破坏实验均检测到预期失败。用户脚本复验及三项页面观察已通过，Network人工观察未报告，远程CI/PR/部署尚未发生；旧D演示保留。独立启动、参数、测试证据和限制见 [验证记录](../process/m1-http-query-validation.md)。写入CSRF、配置归属、午夜、停用竞态、M2/M3和B功能仍待对应阶段，本说明继续累积，A完成后由用户转发，不代发。
+
+2026-10-28 17:29更新：用户已完成只读HTTP脚本复验，真实TCP28及登记通过；D24/M1123有同次本地报告补证。页面人工操作仍待完成，本批未提交/发送，证据分类见 [复验记录](../process/m1-http-query-validation.md)。
+
+后续页面确认：用户对A101四座、插座筛后一座、只读提示/无提交按钮回复“一切正常”。已记录该三项人工验收，按流程本地保存本批；Network专项观察及其他负责人评审不冒充已完成，说明书仍未发送。

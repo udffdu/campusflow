@@ -1,6 +1,6 @@
 {
   "register_status": "partial_draft",
-  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/012部分实现，存储/锁/幂等、内部查询和用户授权的D权限/范围/插座补充已有本地验证；真实网络鉴权、完整可用性与M2/M3集成等仍未完成。M1-B和三项补充的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
+  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/012部分实现，存储/锁/幂等、内部查询和用户授权的D权限/范围/插座补充已有本地验证；只读真实D网络鉴权和查询页面已有AI本地验证，本批人工复验、完整可用性与M2/M3集成仍未完成。M1-B和三项补充的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
   "requirements": [
     {
       "id": "CF-M2-001",
@@ -282,7 +282,11 @@
         "services/seats/src/main/java/io/campusflow/seats/SeatAvailabilityQuery.java",
         "services/seats/src/main/java/io/campusflow/seats/OpeningSchedule.java",
         "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java",
-        "services/seats/src/main/java/io/campusflow/seats/ReservationAccessPolicy.java"
+        "services/seats/src/main/java/io/campusflow/seats/ReservationAccessPolicy.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/DQueryClient.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/QueryController.java",
+        "apps/web/src/views/SeatQueryView.vue",
+        "contracts/m1-query-api.md"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/SeatAvailabilityQueryTest.java",
@@ -290,7 +294,13 @@
         "scripts/check_m1_core_mutations.py",
         "docs/process/m1-availability-validation.md",
         "services/seats/src/test/java/io/campusflow/seats/ReservationAccessPolicyTest.java",
-        "docs/process/m1-d-supplement-validation.md"
+        "docs/process/m1-d-supplement-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
+        "apps/web/src/components/SeatQueryView.test.ts",
+        "scripts/check_m1_http.py",
+        "scripts/check_m1_browser.cjs",
+        "scripts/check_m1_http_mutations.py",
+        "docs/process/m1-http-query-validation.md"
       ]
     },
     {
@@ -483,13 +493,23 @@
         "services/platform/src/main/java/io/campusflow/platform/ResourceService.java",
         "services/seats/src/main/java/io/campusflow/seats/ReservationAccessPolicy.java",
         "apps/web/src/views/ResourcesView.vue",
-        "contracts/platform-api.md"
+        "contracts/platform-api.md",
+        "services/seats/src/main/java/io/campusflow/seats/http/DQueryClient.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/QueryController.java",
+        "apps/web/src/views/SeatQueryView.vue",
+        "contracts/m1-query-api.md"
       ],
       "verification": [
         "services/platform/src/test/java/io/campusflow/platform/PlatformIntegrationTest.java",
         "services/seats/src/test/java/io/campusflow/seats/ReservationAccessPolicyTest.java",
         "apps/web/src/components/ResourcesView.test.ts",
-        "docs/process/m1-d-supplement-validation.md"
+        "docs/process/m1-d-supplement-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
+        "apps/web/src/components/SeatQueryView.test.ts",
+        "scripts/check_m1_http.py",
+        "scripts/check_m1_browser.cjs",
+        "scripts/check_m1_http_mutations.py",
+        "docs/process/m1-http-query-validation.md"
       ]
     }
   ]

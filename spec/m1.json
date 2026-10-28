@@ -142,7 +142,10 @@
     "availability_validation": "docs/process/m1-availability-validation.md",
     "d_integration_review": "docs/process/m1-d-integration-review.md",
     "integration_handoff": "docs/handoffs/m1-integration.md",
-    "d_supplement_validation": "docs/process/m1-d-supplement-validation.md"
+    "d_supplement_validation": "docs/process/m1-d-supplement-validation.md",
+    "http_query_plan": "docs/architecture/m1-http-query-plan.md",
+    "http_query_validation": "docs/process/m1-http-query-validation.md",
+    "query_api": "contracts/m1-query-api.md"
   },
   "delivery": {
     "implemented": false,
@@ -319,5 +322,92 @@
     "d_personally_approved": false,
     "other_owner_handoff": "document_for_user_to_forward_after_completion",
     "other_pending_policies_approved": false
+  },
+  "http_query_stage": {
+    "status": "implemented_and_locally_tested; user_script_and_three_ui_checks_accepted",
+    "implementation_started": true,
+    "scope": [
+      "D现有API真实网络鉴权/主数据适配",
+      "M1有权教室列表和候选座位GET",
+      "Vue只读座位查询页面",
+      "独立联调与真实网络测试"
+    ],
+    "user_confirmation": {
+      "by": "leafwhisper286",
+      "at": "2026-10-28",
+      "response": "同意",
+      "other_owners_approved": false
+    },
+    "plan": "docs/architecture/m1-http-query-plan.md",
+    "reservation_writes_in_scope": false,
+    "d_contract_changes_in_scope": false,
+    "existing_demo_replacement_in_scope": false,
+    "full_availability_claim_allowed": false,
+    "other_pending_policies_approved": false,
+    "validation": "docs/process/m1-http-query-validation.md",
+    "local_results": {
+      "platform_tests": 24,
+      "seats_tests": 123,
+      "web_tests": 22,
+      "real_tcp_checks": 28,
+      "browser": "passed; local Chrome through actual Vite/D/M1",
+      "mutations": 6
+    },
+    "human_acceptance": "script_reproduced_and_three_requested_ui_checks_confirmed; Network_observation_not_reported",
+    "committed": true,
+    "remote_ci": "not_run",
+    "deployment": "not_done",
+    "human_script_verification": {
+      "recorded_at": "2026-10-28",
+      "provided_output_finished_at": "2026-10-28T17:29:45+08:00",
+      "explicit_user_output": [
+        "classpath preparation BUILD SUCCESS (0.412s, not full test duration)",
+        "28 real TCP checks passed",
+        "browser_checked=false",
+        "repository register: 4 modules / 27 requirements passed"
+      ],
+      "local_report_corroboration": {
+        "D": {
+          "tests": 24,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "mtime": "2026-10-28T17:29:31+08:00"
+        },
+        "M1": {
+          "tests": 123,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "mtime_range": [
+            "2026-10-28T17:29:34+08:00",
+            "2026-10-28T17:29:39+08:00"
+          ]
+        }
+      },
+      "web_test_build": "successful command flow inferred from set-e script reaching completion; frontend output not pasted",
+      "user_browser_acceptance": false,
+      "other_owner_approval": false
+    },
+    "human_ui_verification": {
+      "recorded_at": "2026-10-28",
+      "confirmed_by": "leafwhisper286",
+      "response": "一切正常",
+      "confirmed_checks": [
+        "A101 future whole-hour one-hour query returns 4 candidates",
+        "POWER_OUTLET filter returns 1 candidate",
+        "read-only notice visible; no reservation submit button"
+      ],
+      "network_observation_confirmed": false,
+      "manager_switch_confirmed": false,
+      "source_code_line_review_confirmed": false,
+      "other_owner_approval": false,
+      "full_m1_acceptance": false
+    },
+    "implementation_commits": [
+      "a963a37",
+      "3a85fd0"
+    ],
+    "documentation_commit_reference": "git log: docs(m1) [CF-M1-001][CF-M1-012] record read-only query acceptance"
   }
 }

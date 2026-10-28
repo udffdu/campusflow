@@ -1,12 +1,12 @@
 # 跨模块接口清单（待组内评审）
 
-M1 接口仍是讨论稿；D 已实现的请求和响应以 [D API v1](platform-api.md) 为准，尚待受影响负责人评审。
+M1浏览器只读接口已实现，见 [M1 查询API](m1-query-api.md)；下方M2/M3内部接口仍是讨论稿；D 已实现的请求和响应以 [D API v1](platform-api.md) 为准，尚待受影响负责人评审。
 每个模块拥有自己的契约；调用方共同评审变更，禁止共享数据库实体作为接口。
 
 | 提供方 | 接口草案 | 调用方 | 验收重点 |
 | --- | --- | --- | --- |
 | D | `GET /api/v1/auth/me` | web | 当前用户、权限和数据范围，不能伪造身份 |
-| D | `POST /internal/v1/authorization` | 敏感写操作 | 动作与具体资源范围校验 |
+| D | `POST /internal/v1/authorization` | M1查询/后续敏感动作 | 动作与具体资源范围校验 |
 | D | `GET /api/v1/resources?type=ROOM` | web | 基础筛选；不声称此刻可预约 |
 | D | `GET /internal/v1/resources/{id}` | M1/M2/M3 | 开放规则、归属、启停、版本 |
 | D | `GET /internal/v1/resources?type=SEAT&parentId={id}` | M1 | 座位属性和启停 |
