@@ -10,7 +10,7 @@ import PageState from '../components/PageState.vue'
 import Pagination from '../components/Pagination.vue'
 import GovernancePanels from '../components/GovernancePanels.vue'
 const {data,loading,error,load}=useList<Identity>();const page=ref(0);const departments=ref<Department[]>([]);const roles=ref<Role[]>([]);const open=ref(false);const editing=ref<Identity|null>(null);const busy=ref(false);const formError=ref('')
-const permissionLabels:Record<string,string>={'spaces.read':'查看空间目录','spaces.write':'维护本院系空间','audit.read':'查询本院系审计'}
+const permissionLabels:Record<string,string>={'spaces.read':'查看空间目录','spaces.write':'维护本院系空间','audit.read':'查询本院系审计','seats.availability.read':'查询可预约座位','seats.reservations.create':'创建本人座位预约','seats.reservations.read.own':'查看本人预约历史'}
 const form=ref({username:'',displayName:'',departmentId:'',roles:['MEMBER'],password:'',active:true})
 function reload(){return load(`/users?page=${page.value}&size=20`)};watch(page,reload)
 async function refreshGovernance(){try{[departments.value,roles.value]=await Promise.all([api<Department[]>('/departments'),api<Role[]>('/roles')])}catch(e){formError.value=message(e)}}
