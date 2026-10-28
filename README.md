@@ -74,6 +74,8 @@ npm run dev
 
 - [架构决策：单仓库与服务边界](docs/architecture/adr-0001-repository-and-services.md)
 - [M2 需求与待决规则](docs/requirements/m2.md)
+- [M1 需求评审稿](docs/requirements/m1.md) · [并发方案 B](docs/architecture/adr-0003-m1-concurrency.md) · [评审包](docs/process/m1-review.md)
+- [M1 核心规则与验证](docs/process/m1-core-validation.md) · [M1-B 接入说明书](docs/handoffs/m1-b.md)（随 A 实现更新，A 完成后交接）
 - [D 实现范围](docs/requirements/d.md) · [D 接口契约](contracts/platform-api.md)
 - [本次验证与验收记录](docs/process/d-validation.md)
 - [风险与工程伦理](docs/requirements/risks-and-ethics.md)

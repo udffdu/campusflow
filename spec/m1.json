@@ -1,0 +1,147 @@
+{
+  "module": "M1",
+  "updated_at": "2026-10-28",
+  "status": "review_draft",
+  "workstreams": [
+    {
+      "id": "A",
+      "owner": "leafwhisper286",
+      "scope": [
+        "查询",
+        "预约",
+        "历史复用",
+        "统一占用与M2/M3对接"
+      ]
+    },
+    {
+      "id": "B",
+      "owner": null,
+      "scope": [
+        "签到",
+        "提醒",
+        "违约",
+        "运营查询"
+      ]
+    }
+  ],
+  "reviewer": null,
+  "collaboration": {
+    "delivery": "各自负责所认领功能的前后端和测试",
+    "review": "交叉评审",
+    "status": "user_confirmed",
+    "other_member_review_evidence": null,
+    "m1_internal_decision_owner": "leafwhisper286",
+    "b_handoff": "after_a_complete",
+    "b_review_is_current_prerequisite": false,
+    "decision_recorded_at": "2026-10-28"
+  },
+  "user_confirmed_rules": {
+    "max_advance": {
+      "value": 1,
+      "unit": "day",
+      "configurable": true,
+      "confirmed_at": "2026-10-27"
+    },
+    "user_overlap": {
+      "overlapping_effective_reservations_allowed": false,
+      "non_overlapping_different_seats_allowed": true,
+      "confirmed_at": "2026-10-27"
+    },
+    "existing_personal_vs_m2": {
+      "preserve_existing_personal_reservation": true,
+      "conflicting_m2_occupancy_rejected": true,
+      "m2_review": "pending"
+    },
+    "reservation_states": {
+      "values": [
+        "CONFIRMED",
+        "CHECKED_IN",
+        "COMPLETED",
+        "NO_SHOW",
+        "DISRUPTED"
+      ],
+      "confirmed_by": "leafwhisper286",
+      "confirmed_at": "2026-10-28",
+      "b_personally_approved": false
+    }
+  },
+  "concurrency": {
+    "choice": "B",
+    "description": "按用户和教室取得数据库事务锁，全部相关写入遵守统一顺序",
+    "selected_by": "leafwhisper286",
+    "selected_at": "2026-10-28",
+    "affected_owner_review": "M1内部由用户决定，D/M2/M3相关接口和其schema仍待受影响方评审",
+    "implementation_status": "personal_reservations_implemented_and_locally_tested; M2/M3 not integrated",
+    "adr": "docs/architecture/adr-0003-m1-concurrency.md"
+  },
+  "proposed_details": {
+    "max_advance_interpretation": {
+      "hours": 24,
+      "rolling": true,
+      "applies_to": "startAt",
+      "upper_bound_inclusive": true,
+      "status": "proposed"
+    },
+    "interval": "[startAt,endAt)",
+    "timezone": "Asia/Shanghai",
+    "max_duration_hours_default": 4,
+    "config_management_owner": null,
+    "checkin_window": null,
+    "student_cancellation_policy": null
+  },
+  "dependency_reviews": [
+    {
+      "owner": "M1-B",
+      "subject": "预约状态、字段、版本、锁顺序、签到超时竞态、释放和免违约",
+      "status": "handoff_deferred_by_user",
+      "decision_owner": "leafwhisper286",
+      "reason": "用户决定M1内部设计，A完成后再向B提供说明书，不要求当前先取得B确认"
+    },
+    {
+      "owner": "D",
+      "subject": "M1业务权限与角色、全校/院系访问范围、插座属性、主数据变更竞态、配置管理、通知渠道、服务凭据和CSRF",
+      "status": "pending"
+    },
+    {
+      "owner": "M2",
+      "subject": "保留已有个人预约、占用失败的审批状态、网络超时查询及重复/乱序请求",
+      "status": "pending"
+    },
+    {
+      "owner": "M3",
+      "subject": "来源独立解除、已有预约处置和免违约",
+      "status": "pending"
+    }
+  ],
+  "documents": {
+    "requirements": "docs/requirements/m1.md",
+    "review": "docs/process/m1-review.md",
+    "handoff": "docs/handoffs/m1-b.md",
+    "storage_design": "docs/architecture/m1-storage.md",
+    "storage_validation": "docs/process/m1-storage-validation.md"
+  },
+  "delivery": {
+    "implemented": false,
+    "human_acceptance": "core_and_store_local_build_test_reproduced_by_user",
+    "peer_review": "not_performed; M1-B handoff deferred by user",
+    "remote_ci": "not_run",
+    "core_rules": "implemented_and_locally_tested",
+    "reservation_store": "implemented_and_locally_tested",
+    "migrations": "M1 V1 verified in temporary PostgreSQL only; not deployed",
+    "human_verification": {
+      "reported_by": "leafwhisper286",
+      "reported_finished_at": "2026-10-28T13:24:09+08:00",
+      "elapsed_seconds": 2.148,
+      "tests": 43,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "build": "SUCCESS",
+      "evidence": "用户提供Maven verify结果",
+      "scope": "本地核心规则和个人预约存储构建/测试复验",
+      "full_m1_acceptance": false,
+      "peer_review_completed": false,
+      "record": "docs/process/m1-storage-validation.md"
+    }
+  }
+}
