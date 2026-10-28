@@ -426,7 +426,12 @@
         "services/seats/src/main/java/io/campusflow/seats/http/DemoReservationHandler.java",
         "services/seats/src/main/java/io/campusflow/seats/http/ReservationReadController.java",
         "apps/web/src/components/ReservationSubmitPanel.vue",
-        "contracts/m1-reservation-demo-api.md"
+        "contracts/m1-reservation-demo-api.md",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java",
+        "apps/web/src/views/MyReservationsView.vue",
+        "apps/web/src/views/SeatQueryView.vue",
+        "contracts/m1-history-api.md",
+        "docs/architecture/m1-history-plan.md"
       ],
       "verification": [
         "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
@@ -434,7 +439,13 @@
         "apps/web/src/components/ReservationSubmitPanel.test.ts",
         "scripts/check_m1_submit.py",
         "scripts/check_m1_submit_mutations.py",
-        "docs/process/m1-reservation-submit-validation.md"
+        "docs/process/m1-reservation-submit-validation.md",
+        "services/seats/src/test/java/io/campusflow/seats/ReservationStoreTest.java",
+        "apps/web/src/components/MyReservationsView.test.ts",
+        "apps/web/src/components/SeatQueryView.test.ts",
+        "scripts/check_m1_history_mutations.py",
+        "scripts/check-m1-history.sh",
+        "docs/process/m1-history-validation.md"
       ]
     },
     {

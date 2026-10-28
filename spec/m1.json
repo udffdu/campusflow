@@ -482,5 +482,100 @@
     "complete_history_list": false,
     "repeat_booking_from_history": false,
     "other_business_implemented": false
+  },
+  "history_stage": {
+    "status": "user_script_history_ui_and_hour_picker_confirmed",
+    "requirement": "CF-M1-006",
+    "user_confirmation": {
+      "by": "leafwhisper286",
+      "at": "2026-10-28",
+      "instruction": "请继续完成",
+      "context": "after presentation of own history, reuse original room/seat, choose new times and revalidate"
+    },
+    "plan": "docs/architecture/m1-history-plan.md",
+    "contract": "contracts/m1-history-api.md",
+    "validation": "docs/process/m1-history-validation.md",
+    "implemented": [
+      "owner-scoped all-state cursor history; default 20 max 50",
+      "read-own and current query/resource validation for repeat context",
+      "my-reservations page and read-own-only landing",
+      "clear old times; requery original seat; new protected request preserves original",
+      "pending-result protection and stale user response discard"
+    ],
+    "new_test_results": {
+      "seats": 157,
+      "web": 46,
+      "web_files": 9,
+      "real_read_tcp_regression": 28,
+      "real_submission_and_history_tcp": 48,
+      "mutations": 4,
+      "original_java_unchanged_during_mutations": true,
+      "ai_browser_checked": false,
+      "D24": "prior evidence retained; not rerun"
+    },
+    "new_schema_or_dependencies": false,
+    "new_D_api_or_code": false,
+    "production_writes_authorized": false,
+    "other_module_business_implemented": false,
+    "formal_rolling_24_hour_policy_approved": false,
+    "d_stop_race_policy_approved": false,
+    "m2_m3_contracts_approved": false,
+    "human_acceptance": "user_script_and_three_history_repeat_ui_observations_confirmed; hour_controls_and_labels_accepted_on_continue",
+    "committed": true,
+    "remote_ci": "not_run",
+    "deployment": "not_done",
+    "own_history_list": "implemented; requested user UI observations confirmed",
+    "repeat_booking": "isolated personal demo; requested user UI observations confirmed",
+    "remaining": [
+      "M1-side M2/M3 occupancy sources",
+      "formal configuration and advance-window interpretation",
+      "cross-service D disable race",
+      "B lifecycle business stays with B"
+    ],
+    "human_script_verification": {
+      "at": "2026-10-28T23:41:27+08:00",
+      "user_reported_real_read_tcp": 28,
+      "user_reported_real_submission_and_history_tcp": 48,
+      "user_reported_repository_check": "passed; 4 modules, 27 requirements",
+      "seats_local_report_corroboration": "157 tests; zero failures/errors/skips; report mtimes 23:41:17-23:41:23+08:00",
+      "web": "set-e completion supports test/build success; count not explicitly pasted by user",
+      "classpath_duration_seconds": 0.416,
+      "duration_scope": "classpath preparation only; not test suite duration",
+      "d_tests": "not rerun; prior D24 retained",
+      "browser_checked": false
+    },
+    "existing_demo_restarted_by_ai": false,
+    "anonymous_route_observation": {
+      "url": "http://localhost:5274/api/m1/v1/reservations?size=1",
+      "status": 401,
+      "scope": "new history route responds; no cookies/owner data read; not browser or human UI acceptance"
+    },
+    "human_ui_verification": {
+      "at": "2026-10-28",
+      "by": "leafwhisper286",
+      "statement": "结果正常，但是我发现一个小问题，就是在选择时间的时候，如果起止时间不是整点就无法填入，这是预设的规则吗？如果是预设规则的话，为什么不把“分钟”选择删除只保留“小时”呢？",
+      "scope": "three prior history/repeat UI observations confirmed; minute selector feedback tracked separately; no source/Network/other owner review claim"
+    },
+    "hour_picker_followup": {
+      "requirement": "CF-M1-002",
+      "mode": "separate start/end dates and 00..23 hour selects; minutes fixed 00",
+      "business_rule_changed": false,
+      "backend_changed": false,
+      "tests": 46,
+      "test_files": 9,
+      "typecheck_and_build": "passed; 121ms build",
+      "ai_browser_check": "real existing 5274 seat-query UI; date 2026-10-29 and hours 14 to 15 selected; all four controls valid; no query/POST submitted",
+      "human_acceptance": "2026-10-29 user accepted adjustment and continued",
+      "committed": true,
+      "user_response": {
+        "at": "2026-10-29",
+        "statement": "好的，我们进行下一步吧",
+        "interpretation": "accept latest hour-control/label adjustment and continue; not source/Network review or complete M1 acceptance"
+      }
+    },
+    "implementation_commits": {
+      "backend_and_network": "dbead3f",
+      "web_history_repeat_and_hour_controls": "8a4748e"
+    }
   }
 }

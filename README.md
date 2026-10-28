@@ -78,6 +78,8 @@ M1已有独立只读HTTP与座位查询页，尚不开放预约提交。Java21/N
 
 使用`bash scripts/check-m1-submit.sh`复验，`bash scripts/start-m1-reservation-demo.sh`启动独立18180/18181/5274环境。浏览器用localhost:5274，账号student、终端临时密码；本轮只演示个人预约，未包含M2整教室/维修限制，生产入口仍关闭。见[分工边界](docs/requirements/m1-a-boundary.md)和[验证/操作步骤](docs/process/m1-reservation-submit-validation.md)。
 
+本人历史/再次预约新增`/my-reservations`，复用原座位后必须重新填写时段并重新验证，正式写入口继续关闭。运行`bash scripts/check-m1-history.sh`复验本轮157后端/46前端/28只读及48提交网络检查；旧Java演示需按步骤重启才能加载新接口，临时数据库会清理，已加载新版的当前演示无需重复重启。脚本、指定页面观察及日期＋整点下拉已获用户确认，详见[历史验证与人工操作](docs/process/m1-history-validation.md)及[接口契约](contracts/m1-history-api.md)。
+
 ## 关键文档
 
 - [架构决策：单仓库与服务边界](docs/architecture/adr-0001-repository-and-services.md)
