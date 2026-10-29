@@ -5,8 +5,8 @@
 ## 仓库与基线
 
 - 正式开发目录：`/Users/lily/Documents/Codex/2026-10-22/qin/work/campusflow`；旧`campusflow-snapshot`仅保留历史演示，不是Git开发目录。
-- 分支：`feat/CF-M1-002-core-rules`；远程：`https://github.com/udffdu/campusflow.git`。
-- 功能验收基线4e5608f，21个自有本地提交。最近实现：33e4a27后端/真实jar网络、91ed835前端、4e5608f文档。收尾文档已获用户确认，随本次文档提交保存，后续以`git log`为准。
+- 分支：`feat/CF-M1-002-personal-reservation`；远程：`https://github.com/udffdu/campusflow.git`。
+- 功能验收基线4e5608f，21个自有本地提交。最近实现：33e4a27后端/真实jar网络、91ed835前端、4e5608f文档。收尾文档已保存为5232648，此22提交基线已上传且远程CI通过；此后分支重命名的链接同步另保存一个仅文档提交，最新版本以`git log`及远程对应CI为准。
 - 继续时先读仓库`AGENTS.md`、本索引和`spec/m1.json`；检查`git status`与远程分支，不重置他人修改、不自动解合并冲突。
 
 ## 运行与检查
@@ -40,4 +40,4 @@ bash "/Users/lily/Documents/Codex/2026-10-22/qin/scripts/check-m1-personal.sh"
 
 ## 上传前后的状态
 
-用户于2026-10-29回复“确认、上传”，授权保存收尾材料并上传。上传目标是现有功能分支，保持提交历史，不强推、不合并main。目标[GitHub分支](https://github.com/udffdu/campusflow/tree/feat/CF-M1-002-core-rules)，推送后核对远程提交SHA与[CI真实结果](https://github.com/udffdu/campusflow/actions)；如需PR评审，另按确认范围创建/完善PR并附验收与未完成项。尚无自动部署证据，不把CI构建等同部署。
+用户于2026-10-29回复“确认、上传”，授权保存收尾材料并上传。上传目标是现有功能分支，保持提交历史，不强推、不合并main。目标[GitHub分支](https://github.com/udffdu/campusflow/tree/feat/CF-M1-002-personal-reservation)，原22个提交已核对远程SHA一致、CI成功；后续每次推送仍核对远程提交SHA与[CI真实结果](https://github.com/udffdu/campusflow/actions)；如需PR评审，另按确认范围创建/完善PR并附验收与未完成项。尚无自动部署证据，不把CI构建等同部署。

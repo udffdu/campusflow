@@ -38,9 +38,13 @@
 ## 本次收尾确认与上传安排
 
 1. 用户于2026-10-29回复“确认、上传”，认可本索引、续做手册和两份负责人说明书及此前展示的上传安排（包含明确未完成项）。
-2. 据此提交本轮仅文档整理，再将已有21个本地提交及该文档提交上传到`udffdu/campusflow`的`feat/CF-M1-002-core-rules`，保留真实提交历史。
+2. 据此提交本轮仅文档整理，再将已有21个本地提交及该文档提交上传到`udffdu/campusflow`的`feat/CF-M1-002-personal-reservation`，保留真实提交历史。
 3. 上传前读取远程引用；同名分支有分叉时停止自动更新，报告情况，不强推或自动解决合并冲突。上传后核对远程SHA并查看对应CI结果；未运行/失败不报告为通过。上传不等于合并main或部署。
 
-本次收尾材料已获用户确认；功能验收基线为4e5608f。上传执行结果以远程分支SHA和对应CI运行记录为准，不预先声称成功。目标分支见[GitHub](https://github.com/udffdu/campusflow/tree/feat/CF-M1-002-core-rules)，CI见[Actions](https://github.com/udffdu/campusflow/actions)。
+本次收尾材料已获用户确认；功能验收基线为4e5608f。上传执行结果以远程分支SHA和对应CI运行记录为准，不预先声称成功。目标分支见[GitHub](https://github.com/udffdu/campusflow/tree/feat/CF-M1-002-personal-reservation)，CI见[Actions](https://github.com/udffdu/campusflow/actions)。
 
 上传范围包含M1-A代码/前端/测试/CI/文档，以及此前用户明确授权的D三项补充（权限与SEAT_USER、bookingScope、POWER_OUTLET和V3迁移）；不是只上传`services/seats`。这批提交未实现M2审批或M3工单。收尾检查：文档链接、登记4模块27需求、diff和本地Git连通性通过；提交路径不含课程原PDF、常见私钥/.env文件、target或node_modules。不将路径检查冒称完整秘密扫描或远程验证。
+
+## 分支名称同步（2026-10-29）
+
+用户明确指定新名称`feat/CF-M1-002-personal-reservation`。GitHub原生重命名后与本地同步跟踪，重命名时SHA仍为5232648，原22个提交内容/编号保持。此前22个提交已在远程，基线[CI运行40809644737](https://github.com/udffdu/campusflow/actions/runs/40809644737)已成功；本次只更新分支引用及文档链接，另保存一个仅文档提交，不改代码/迁移，不合并main或部署。新文档提交的CI结果以GitHub对应运行记录为准。
