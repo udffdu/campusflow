@@ -10,7 +10,7 @@ vi.mock('../m1Api',()=>({m1Get:get}))
 let wrapper:VueWrapper|undefined
 const selection={roomId:'room',seatId:'seat',startAt:'2026-10-29T01:00:00Z',endAt:'2026-10-29T02:00:00Z',roomCode:'A101',seatCode:'S1'}
 const record={...selection,id:'booking',status:'CONFIRMED',version:1,resourceVersion:1,stage:'PERSONAL_DEMO',productionReady:false}
-beforeEach(()=>{sessionStorage.clear();submit.mockReset();get.mockReset();session.user={id:'u',username:'student',displayName:'同学',departmentId:'d',active:true,roles:['SEAT_USER'],permissions:['seats.reservations.create']}})
+beforeEach(()=>{sessionStorage.clear();submit.mockReset();get.mockReset();session.user={id:'u',username:'student',displayName:'同学',email:'student@example.invalid',departmentId:'d',active:true,roles:['SEAT_USER'],permissions:['seats.reservations.create']}})
 afterEach(()=>{wrapper?.unmount();wrapper=undefined})
 async function open(){wrapper=mount(ReservationSubmitPanel,{props:{selection,canCreate:true}});await flushPromises()}
 it('persists intent before sending and preserves the same key after unknown response',async()=>{

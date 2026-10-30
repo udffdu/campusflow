@@ -306,4 +306,18 @@ class QueryHttpTest {
         assertEquals(403,personalGet("/api/m1/v1/rooms/"+room+"/check-in-code").statusCode());
     }
 
+    @Test void reminderAdapterPersistsBothInAppAndEmailTasksWithOneStableEvent()throws Exception{
+        UUID event=UUID.randomUUID();var seen=new CopyOnWriteArrayList<JsonNode>();
+        responder=exchange->{
+            try{seen.add(json.readTree(exchange.getRequestBody()));}
+            catch(Exception exception){throw new RuntimeException(exception);}
+            return new Reply(202,Map.of("id",UUID.randomUUID(),"status","PENDING"),0);
+        };
+        var client=new DQueryClient(json,URI.create("http://127.0.0.1:"+upstream.getAddress().getPort()),KEY,
+                Duration.ofSeconds(1),Duration.ofSeconds(1),Duration.ofSeconds(2),3);
+        client.call().reminder(new DQueryClient.ReminderNotification("m1-reminder:"+event,user,"提醒","正文","SEAT_RESERVATION",event.toString()));
+        assertEquals(List.of("/internal/v1/notifications","/internal/v1/email-notifications"),calls);
+        assertEquals(2,seen.size());assertEquals(seen.get(0),seen.get(1));assertEquals(user.toString(),seen.getFirst().path("recipientId").asText());
+    }
+
 }

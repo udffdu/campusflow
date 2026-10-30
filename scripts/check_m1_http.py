@@ -175,11 +175,12 @@ def launch(stack, module, port, env, logdir, **extra):
     return process
 
 
-def seed(base, password, many):
+def seed(base, password, many, student_email=None):
     admin = BrowserHTTP(base)
     admin.login('admin', password)
     def create_user(name, dept, roles):
-        return admin.request('/api/v1/users', 'POST', dict(username=name, displayName='本地虚构用户', departmentId=dept, roles=roles, password=password), 201)[1]
+        email=student_email if name=='student' and student_email else name+'@example.invalid'
+        return admin.request('/api/v1/users', 'POST', dict(username=name, displayName='本地虚构用户', email=email, departmentId=dept, roles=roles, password=password), 201)[1]
     identities = {
         'student': create_user('student', DEPT, ['SEAT_USER']),
         'outsider': create_user('outsider', OTHER, ['MEMBER', 'SEAT_USER']),

@@ -24,7 +24,7 @@ class ReservationCheckInStoreTest {
     @BeforeAll static void database() throws Exception {
         postgres = EmbeddedPostgres.builder().setPort(0).setServerConfig("listen_addresses", "127.0.0.1").start();
         dataSource = postgres.getPostgresDatabase(); jdbc = new JdbcTemplate(dataSource);
-        assertEquals(2, Flyway.configure().dataSource(dataSource).schemas("m1").defaultSchema("m1").load().migrate().migrationsExecuted);
+        assertEquals(3, Flyway.configure().dataSource(dataSource).schemas("m1").defaultSchema("m1").load().migrate().migrationsExecuted);
     }
     @AfterAll static void close() throws Exception { if (postgres != null) postgres.close(); }
     @BeforeEach void reset() {

@@ -48,7 +48,7 @@ class ReservationStoreTest {
         dataSource = postgres.getPostgresDatabase();
         jdbc = new JdbcTemplate(dataSource);
         flyway = Flyway.configure().dataSource(dataSource).schemas("m1").defaultSchema("m1").load();
-        assertEquals(2, flyway.migrate().migrationsExecuted);
+        assertEquals(3, flyway.migrate().migrationsExecuted);
     }
 
     @AfterAll static void closeDatabase() throws Exception {

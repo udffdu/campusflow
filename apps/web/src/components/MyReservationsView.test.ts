@@ -11,7 +11,7 @@ vi.mock('../reservations',async()=>({...await vi.importActual<typeof import('../
 let wrapper:VueWrapper|undefined
 const record={id:'booking-1',roomId:'r',seatId:'s',startAt:'2026-10-29T01:00:00Z',endAt:'2026-10-29T02:00:00Z',status:'CONFIRMED',version:1,resourceVersion:1,stage:'PERSONAL_DEMO',productionReady:false}
 const caps={canReadOwn:true,canCreateDemoReservation:true,productionReady:false,stage:'PERSONAL_DEMO'}
-beforeEach(()=>{sessionStorage.clear();get.mockReset();push.mockReset();checkIn.mockReset();session.user={id:'u',username:'student',displayName:'同学',departmentId:'d',active:true,roles:['SEAT_USER'],permissions:['seats.reservations.read.own','seats.availability.read','seats.reservations.create']};get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?caps:{items:[record],size:20,nextCursor:''})})
+beforeEach(()=>{sessionStorage.clear();get.mockReset();push.mockReset();checkIn.mockReset();session.user={id:'u',username:'student',displayName:'同学',email:'student@example.invalid',departmentId:'d',active:true,roles:['SEAT_USER'],permissions:['seats.reservations.read.own','seats.availability.read','seats.reservations.create']};get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?caps:{items:[record],size:20,nextCursor:''})})
 afterEach(()=>{wrapper?.unmount();wrapper=undefined})
 async function open(){wrapper=mount(MyReservationsView,{global:{stubs:{RouterLink:true}}});await flushPromises()}
 it('reads own records without passing a user identity and opens repeat using only the reservation ID',async()=>{

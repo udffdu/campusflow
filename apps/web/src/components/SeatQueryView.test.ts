@@ -9,7 +9,7 @@ vi.mock('../m1Api',async original=>({...await original<typeof import('../m1Api')
 let wrapper:VueWrapper|undefined
 const room={id:'r',code:'A101',name:'测试教室',bookingScope:'CAMPUS',openingHours:[]}
 const data={roomId:'r',reason:'NONE',items:[{id:'s',code:'S01',hasPowerOutlet:true}],page:0,size:20,total:1,stage:'CANDIDATE_ONLY',canReserve:false}
-beforeEach(()=>{sessionStorage.clear();route.query={};replace.mockReset();session.user={id:'u',username:'student',displayName:'同学',departmentId:'d',active:true,roles:['SEAT_USER'],permissions:['seats.availability.read','seats.reservations.create','seats.reservations.read.own']};get.mockReset();get.mockImplementation(async(path:string)=>path.startsWith('/rooms')?{items:[room],page:0,size:20,total:1}:data)})
+beforeEach(()=>{sessionStorage.clear();route.query={};replace.mockReset();session.user={id:'u',username:'student',displayName:'同学',email:'student@example.invalid',departmentId:'d',active:true,roles:['SEAT_USER'],permissions:['seats.availability.read','seats.reservations.create','seats.reservations.read.own']};get.mockReset();get.mockImplementation(async(path:string)=>path.startsWith('/rooms')?{items:[room],page:0,size:20,total:1}:data)})
 afterEach(()=>wrapper?.unmount())
 async function open(){wrapper=mount(SeatQueryView);await flushPromises()}
 async function fillTimes(start:string,end:string){

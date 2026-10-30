@@ -13,7 +13,7 @@ beforeEach(()=>{
   writes=[]
   resource={id:'room',type:'ROOM',parentId:'building',code:'A101',name:'A101教室',departmentId:'EIE',capacity:40,
     features:['投影仪'],openingHours:[],active:true,effectiveActive:true,version:7,updatedAt:'2026-10-28T00:00:00Z',bookingScope:'CAMPUS'}
-  session.user={id:'manager',username:'manager',displayName:'管理员',departmentId:'EIE',active:true,
+  session.user={id:'manager',username:'manager',displayName:'管理员',email:'manager@example.invalid',departmentId:'EIE',active:true,
     roles:['SPACE_MANAGER'],permissions:['spaces.read','spaces.write']}
   apiMock.mockImplementation(async(path:string,method?:string,body?:Record<string,unknown>)=>{
     if(path==='/departments')return[{id:'EIE',code:'EIE',name:'信息工程学院'}]
