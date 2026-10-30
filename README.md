@@ -2,7 +2,7 @@
 
 以自习座位预约为核心，连接整教室申请审批与物业报修的课程实践项目。
 
-当前阶段：D 公共层与前端公共外壳已实现，用户于 2026-10-23 确认本版并授权提交推送，跨模块契约仍待组内评审。M1-A 已有部分内部实现及本地验证，完整 M1 和 M2/M3 业务尚未交付；尚未部署华为云。
+当前阶段：D 公共层与前端公共外壳已实现；M1-A 个人预约及 M1-B 的 CF-M1-007 每日教室码、本人签到、使用计时与主动退座已实现，当前页面流程已由用户确认。最新使用状态/退座调整尚未重新运行自动化检查；提醒、未签到违约、自动结束、运营查询、M2/M3 业务及跨模块契约仍未完成；尚未部署华为云。
 
 ## 已确认的上下文
 
@@ -82,6 +82,16 @@ M1已有独立只读HTTP与座位查询页，尚不开放预约提交。Java21/N
 
 本人历史/再次预约位于`/my-reservations`，复用原座位后必须重新填写时段并重新验证；普通环境可按上述配置新建，旧演示保持独立。运行`bash scripts/check-m1-history.sh`复验本轮157后端/46前端/28只读及48提交网络检查；旧Java演示需按步骤重启才能加载新接口，临时数据库会清理，已加载新版的当前演示无需重复重启。脚本、指定页面观察及日期＋整点下拉已获用户确认，详见[历史验证与人工操作](docs/process/m1-history-validation.md)及[接口契约](contracts/m1-history-api.md)。
 
+## M1-B CF-M1-007 每日教室码与签到
+
+学生在`/my-reservations`的“已预约”记录中输入 6 位当日教室码签到。按 2026-10-30 用户最新决定，当前体验阶段不限制签到时间；服务端只允许本人把`CONFIRMED`原子更新为`CHECKED_IN`。正确码会进入`/seat-usage/:reservationId`使用状态页，由服务端签到时刻驱动计时；学生二次确认退座后原子更新为`COMPLETED`并停止计时。错误码清空后可重新输入，数据库错误次数限制仍保留。空间管理员从“空间资源”的启用教室详情打开`/room-checkin-display/:roomId`，可查看按上海日期轮换的教室码和倒计时。CF-M1-008～011仍未实现。
+
+普通入口额外要求独立的`M1_CHECKIN_SECRET`。复验继续使用`bash scripts/check-m1-personal.sh`；人工页面验收使用`bash scripts/start-m1-personal-preview.sh`。详见[签到/使用状态API契约](contracts/m1-check-in-api.md)和[验证记录](docs/process/m1-check-in-validation.md)。历史自动化结果不代表最新调整、远程CI、提交或部署已经通过。
+
+签到人工预览必须使用`start-m1-personal-preview.sh`及其`http://[::1]:5374`地址；`run-local-demo.sh`只启动D公共层，单独配合5173前端不会启动M1。预览会创建`student`与`manager`，并为`student`准备一条A101预约，便于完成“管理员取码—学生签到—计时—退座”检查。
+
+**不同身份必须使用不同浏览器环境。** `manager`与`student`不能只在同一浏览器配置下打开两个标签页，因为同源标签页共享`CF_SESSION` Cookie，后登录的账号会替换前一个账号。需要同时查看两个身份时，请使用两个不同浏览器（例如 Edge 与 Chrome），或一个普通窗口和一个 InPrivate/无痕窗口；也可以在同一窗口退出`manager`后再登录`student`顺序验收。
+
 ## 关键文档
 
 - [M1-A阶段交付与文档索引](docs/handoffs/m1-a-delivery.md) · [续做手册](docs/handoffs/m1-a-resume.md)（当前状态、按负责人交接、延期项及上传安排）
@@ -90,6 +100,7 @@ M1已有独立只读HTTP与座位查询页，尚不开放预约提交。Java21/N
 - [M2 需求与待决规则](docs/requirements/m2.md)
 - [M1 需求评审稿](docs/requirements/m1.md) · [并发方案 B](docs/architecture/adr-0003-m1-concurrency.md) · [评审包](docs/process/m1-review.md)
 - [M1 核心规则与验证](docs/process/m1-core-validation.md) · [M1-B 接入说明书](docs/handoffs/m1-b.md)（随 A 实现更新，A 完成后交接）
+- [CF-M1-007 签到契约](contracts/m1-check-in-api.md) · [签到验证记录](docs/process/m1-check-in-validation.md)
 - [M1 内部座位查询方案](docs/architecture/m1-availability-plan.md) · [80测试与查询复验](docs/process/m1-availability-validation.md)（完整D/M2/M3集成仍待进行）
 - [D三项补充实际验证](docs/process/m1-d-supplement-validation.md) · [D/M1-B/M2/M3负责人说明书](docs/handoffs/m1-integration.md)（M1 86及前端11已有用户复验，D24由同次本地报告补证；未部署）
 - [D 实现范围](docs/requirements/d.md) · [D 接口契约](contracts/platform-api.md)

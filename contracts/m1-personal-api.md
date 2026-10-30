@@ -11,13 +11,14 @@
 | M1_WRITE_ENABLED=true | 打开普通个人创建路由，其他写方法/未知写路径继续关闭 |
 | M1_BROWSER_ORIGIN | 浏览器实际Origin，只有协议/主机/可选端口，无路径或末尾斜杠；远程站点要求HTTPS，HTTP仅localhost/127.0.0.1/[::1] |
 | M1_CSRF_SECRET | 至少32随机字节的Base64，独立于M1_SERVICE_KEY；不提交或输出真实值 |
+| M1_CHECKIN_SECRET | 至少32随机字节的Base64，独立于CSRF和服务凭据；启用普通写入口时用于每日教室签到码 |
 | M1_DATABASE_URL/USER/PASSWORD | M1自己的持久化PostgreSQL，Flyway只管理m1 schema；不连接D业务表 |
 | M1_D_BASE_URL/SERVICE_KEY | D原有服务地址及M1调用D凭据 |
 | M1_ADVANCE_MODE | 默认CALENDAR_DAYS，可显式ROLLING兼容旧演示 |
 | M1_MAX_ADVANCE | 提前窗口，生产自然日模式要求0～365整日Duration；当前用户选择1天，即PT24H |
 | M1_MAX_DURATION | 正整数小时Duration，当前PT4H |
 
-启用时不合法Origin/缺失秘密/弱长度/复用服务凭据不能启动成功。显式配置后，使用正常`java -jar services/seats/target/seats-0.1.0-SNAPSHOT.jar`运行。密钥经环境注入，不写进命令行参数或Git；退出应用不删除外部数据库。测试预览另用一次性PG，退出预览会清理，仅为方便本机验收，不表示生产必须使用临时DB。
+启用时不合法Origin/缺失秘密/弱长度/复用服务凭据不能启动成功。签到端点及详细边界见[签到契约](m1-check-in-api.md)。显式配置后，使用正常`java -jar services/seats/target/seats-0.1.0-SNAPSHOT.jar`运行。密钥经环境注入，不写进命令行参数或Git；退出应用不删除外部数据库。测试预览另用一次性PG，退出预览会清理，仅为方便本机验收，不表示生产必须使用临时DB。
 
 ## 时间规则
 
