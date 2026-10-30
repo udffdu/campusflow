@@ -14,7 +14,7 @@ public final class Models {
     public record Permission(String code,String name,boolean globalOnly) {}
     public record RoleWrite(@NotBlank @Pattern(regexp="[A-Z][A-Z0-9_]{2,31}") String code,
                              @NotBlank @Size(max=64) String name, @NotEmpty @Size(max=32) Set<String> permissions) {}
-    public record Identity(UUID id, String username, String displayName, UUID departmentId, boolean active,
+    public record Identity(UUID id, String username, String displayName, String email, UUID departmentId, boolean active,
                            List<String> roles, Set<String> permissions) {
         public boolean admin() { return roles.contains("ADMIN"); }
     }
@@ -22,10 +22,16 @@ public final class Models {
     public record PasswordChange(@NotBlank @Size(max=72) String currentPassword,
                                  @NotBlank @Size(min=12,max=72) String newPassword) {}
     public record UserCreate(@NotBlank @Pattern(regexp="[a-zA-Z0-9._-]{3,48}") String username,
-                             @NotBlank @Size(max=64) String displayName, @NotNull UUID departmentId,
-                             @NotEmpty @Size(max=16) Set<String> roles, @NotBlank @Size(min=12,max=72) String password) {}
-    public record UserUpdate(@NotBlank @Size(max=64) String displayName, @NotNull UUID departmentId,
-                             @NotEmpty @Size(max=16) Set<String> roles, boolean active) {}
+                             @NotBlank @Size(max=64) String displayName,
+                             @Email @Size(max=254) String email, @NotNull UUID departmentId,
+                             @NotEmpty @Size(max=16) Set<String> roles, @NotBlank @Size(min=12,max=72) String password) {
+        public UserCreate(String username,String displayName,UUID departmentId,Set<String> roles,String password){this(username,displayName,null,departmentId,roles,password);}
+    }
+    public record UserUpdate(@NotBlank @Size(max=64) String displayName,
+                             @Email @Size(max=254) String email, @NotNull UUID departmentId,
+                             @NotEmpty @Size(max=16) Set<String> roles, boolean active) {
+        public UserUpdate(String displayName,UUID departmentId,Set<String> roles,boolean active){this(displayName,null,departmentId,roles,active);}
+    }
     public record OpeningHour(@Min(1) @Max(7) int day, @NotNull LocalTime start, @NotNull LocalTime end) {}
     public enum BookingScope { DEPARTMENT, CAMPUS }
     public record Resource(UUID id, String type, UUID parentId, String code, String name, UUID departmentId,

@@ -19,11 +19,24 @@ platform:
   cookie-secure: ${COOKIE_SECURE:true}
   session-hours: 8
   bootstrap-password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+  bootstrap-email: ${BOOTSTRAP_ADMIN_EMAIL:}
   service-keys:
     M1: ${M1_SERVICE_KEY:}
     M2: ${M2_SERVICE_KEY:}
     M3: ${M3_SERVICE_KEY:}
-  delivery-delay-ms: 3000
+  delivery-delay-ms: ${PLATFORM_DELIVERY_DELAY_MS:3000}
+  email-delivery-delay-ms: ${PLATFORM_EMAIL_DELIVERY_DELAY_MS:3000}
+  mail:
+    enabled: ${PLATFORM_MAIL_ENABLED:false}
+    host: ${PLATFORM_SMTP_HOST:}
+    port: ${PLATFORM_SMTP_PORT:587}
+    username: ${PLATFORM_SMTP_USERNAME:}
+    password: ${PLATFORM_SMTP_PASSWORD:}
+    from: ${PLATFORM_MAIL_FROM:}
+    starttls: ${PLATFORM_SMTP_STARTTLS:true}
+    ssl: ${PLATFORM_SMTP_SSL:false}
+    connect-timeout: ${PLATFORM_SMTP_CONNECT_TIMEOUT:PT3S}
+    read-timeout: ${PLATFORM_SMTP_READ_TIMEOUT:PT5S}
 logging:
   level:
     org.springframework.security: WARN

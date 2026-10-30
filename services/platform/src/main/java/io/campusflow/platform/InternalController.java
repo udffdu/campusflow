@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/internal/v1")
 @Validated
 public class InternalController {
-    private final Access access; private final IdentityService identities; private final ResourceService resources; private final AuditService audit; private final NotificationService notifications;
-    InternalController(Access access,IdentityService identities,ResourceService resources,AuditService audit,NotificationService notifications) { this.access=access;this.identities=identities;this.resources=resources;this.audit=audit;this.notifications=notifications; }
+    private final Access access; private final IdentityService identities; private final ResourceService resources; private final AuditService audit; private final NotificationService notifications; private final EmailNotificationService emails;
+    InternalController(Access access,IdentityService identities,ResourceService resources,AuditService audit,NotificationService notifications,EmailNotificationService emails) { this.access=access;this.identities=identities;this.resources=resources;this.audit=audit;this.notifications=notifications;this.emails=emails; }
     @PostMapping("/authorization") Map<String,Object> authorize(@Valid @RequestBody Authorization input) {
         access.source(); var user=identities.findSession(input.sessionToken());
         if(user.isEmpty()) return Map.of("allowed",false);
@@ -26,5 +26,7 @@ public class InternalController {
     @GetMapping("/resources/{id}") Resource resource(@PathVariable UUID id) { access.source();return resources.get(id); }
     @PostMapping("/notifications") @ResponseStatus(HttpStatus.ACCEPTED) Delivery notification(@Valid @RequestBody NotificationEvent input) { return notifications.receive(access.source(),input); }
     @GetMapping("/notifications/{id}") Delivery receipt(@PathVariable UUID id) { return notifications.get(id,access.source()); }
+    @PostMapping("/email-notifications") @ResponseStatus(HttpStatus.ACCEPTED) Delivery email(@Valid @RequestBody NotificationEvent input) { return emails.receive(access.source(),input); }
+    @GetMapping("/email-notifications/{id}") Delivery emailReceipt(@PathVariable UUID id) { return emails.get(id,access.source()); }
     @PostMapping("/audit") Map<String,UUID> audit(@Valid @RequestBody AuditEvent input,HttpServletRequest req) { return Map.of("id",audit.receive(access.source(),input,ApiErrors.requestId(req))); }
 }
