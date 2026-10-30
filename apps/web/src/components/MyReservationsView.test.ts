@@ -47,7 +47,7 @@ it('ordinary capability routes repeat to the normal personal page and accepts or
 it('submits a six digit code and updates only the returned reservation state',async()=>{
   checkIn.mockResolvedValue({...record,status:'CHECKED_IN',version:2,stage:'PERSONAL'});await open()
   await wrapper!.get('input[autocomplete="one-time-code"]').setValue('012345');await wrapper!.findAll('button').find(b=>b.text()==='签到')!.trigger('submit');await flushPromises()
-  expect(checkIn).toHaveBeenCalledWith('booking-1','012345');expect(push).toHaveBeenCalledWith('/seat-usage/booking-1');expect(wrapper!.text()).toContain('进入使用状态');expect(wrapper!.find('input[autocomplete="one-time-code"]').exists()).toBe(false)
+  expect(checkIn).toHaveBeenCalledWith('booking-1','012345');expect(push).toHaveBeenCalledWith('/seat-usage/booking-1');expect(wrapper!.text()).toContain('座位正在使用中');expect(wrapper!.find('input[autocomplete="one-time-code"]').exists()).toBe(false)
 })
 it('clears an incorrect code and keeps the form available for another attempt',async()=>{
   checkIn.mockRejectedValue(new ApiError(422,'CHECK_IN_CODE_INVALID','invalid'));await open();const input=wrapper!.get('input[autocomplete="one-time-code"]')
