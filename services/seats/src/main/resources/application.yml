@@ -30,3 +30,12 @@ m1:
   read-timeout: ${M1_READ_TIMEOUT:PT2S}
   call-budget: ${M1_CALL_BUDGET:PT3S}
   max-pages: ${M1_MAX_PAGES:100}
+  reminders:
+    enabled: ${M1_REMINDERS_ENABLED:false}
+    delay: ${M1_REMINDER_DELAY:PT30S}
+    initial-delay: ${M1_REMINDER_INITIAL_DELAY:PT5S}
+    lease: ${M1_REMINDER_LEASE:PT1M}
+    retry-base: ${M1_REMINDER_RETRY_BASE:PT5S}
+    retry-max: ${M1_REMINDER_RETRY_MAX:PT5M}
+    scan-limit: ${M1_REMINDER_SCAN_LIMIT:200}
+    delivery-limit: ${M1_REMINDER_DELIVERY_LIMIT:25}

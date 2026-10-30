@@ -7,9 +7,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /** No local passwords or Basic authentication: browser identities are verified online by D. */
 @SpringBootApplication
+@EnableScheduling
 public class SeatsApplication {
     public static void main(String[] args) { SpringApplication.run(SeatsApplication.class, args); }
     @Bean Clock clock() { return Clock.systemUTC(); }

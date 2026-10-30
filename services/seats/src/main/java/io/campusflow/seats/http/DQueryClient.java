@@ -39,6 +39,12 @@ public final class DQueryClient {
     }
     @jakarta.annotation.PreDestroy void shutdown() { http.shutdownNow(); }
     public Call call() { return new Call(System.nanoTime()+budget.toNanos()); }
+    public record ReminderNotification(String eventId,UUID recipientId,String title,String body,String objectType,String objectId) {
+        public ReminderNotification {
+            Objects.requireNonNull(eventId);Objects.requireNonNull(recipientId);Objects.requireNonNull(title);
+            Objects.requireNonNull(body);Objects.requireNonNull(objectType);Objects.requireNonNull(objectId);
+        }
+    }
 
     public final class Call {
         private final long deadline;
@@ -107,7 +113,24 @@ public final class DQueryClient {
             }
             throw QueryProblem.upstream();
         }
+        public void reminder(ReminderNotification notification) {
+            try {
+                byte[] body=json.writeValueAsBytes(notification);
+                accept("/internal/v1/notifications",body);
+                accept("/internal/v1/email-notifications",body);
+            } catch(QueryProblem problem){throw problem;}
+            catch(Exception exception){throw QueryProblem.upstream();}
+        }
+        private void accept(String path,byte[] body) {
+            JsonNode response=request(path,body,false,202);
+            id(response,"id");
+            String status=text(response,"status");
+            if(!Set.of("PENDING","RETRY","DELIVERING","DELIVERED","DEAD").contains(status))throw QueryProblem.upstream();
+        }
         private JsonNode request(String path, byte[] body, boolean missingRoom) {
+            return request(path,body,missingRoom,200);
+        }
+        private JsonNode request(String path, byte[] body, boolean missingRoom,int expectedStatus) {
             long remaining=deadline-System.nanoTime();
             if (remaining<=0) throw QueryProblem.upstream();
             Duration timeout=Duration.ofNanos(Math.min(remaining,readTimeout.toNanos()));
@@ -121,7 +144,7 @@ public final class DQueryClient {
                 var response=future.get(timeout.toNanos(),TimeUnit.NANOSECONDS);
                 if (response.statusCode()==404 && missingRoom) throw new QueryProblem(404,"ROOM_NOT_FOUND","教室不存在");
                 // D HTTP 401/403 concern the service credential, never the browser session.
-                if (response.statusCode()!=200) throw QueryProblem.upstream();
+                if (response.statusCode()!=expectedStatus) throw QueryProblem.upstream();
                 JsonNode value=json.reader().with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(response.body());
                 if (value==null || !value.isObject()) throw QueryProblem.upstream();
                 return value;
