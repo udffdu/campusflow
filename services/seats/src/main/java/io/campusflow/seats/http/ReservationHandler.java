@@ -23,7 +23,10 @@ public final class ReservationHandler {
     }
     private ServerResponse csrf(ServerRequest request){
         ReservationReadController.noParams(request.servletRequest());String session=QueryController.session(request.servletRequest());
-        d.call().identity(session,ReservationAccessPolicy.Action.CREATE);
+        var identity=d.call().currentIdentity(session);
+        if(!identity.permissions().contains(ReservationAccessPolicy.Action.CREATE.permission())
+                && !identity.permissions().contains(ReservationAccessPolicy.Action.READ_OWN.permission()))
+            throw new QueryProblem(403,"FORBIDDEN","缺少个人预约写入权限");
         return ServerResponse.ok().body(Map.of("token",permit.issue(session),"headerName","X-M1-CSRF-Token"));
     }
     private ServerResponse create(ServerRequest request)throws Exception {

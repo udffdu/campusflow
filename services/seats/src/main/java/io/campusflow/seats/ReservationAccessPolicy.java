@@ -11,7 +11,10 @@ public final class ReservationAccessPolicy {
     public enum BookingScope { DEPARTMENT, CAMPUS }
 
     public enum Action {
-        QUERY("seats.availability.read"), CREATE("seats.reservations.create"), READ_OWN("seats.reservations.read.own");
+        QUERY("seats.availability.read"), CREATE("seats.reservations.create"),
+        READ_OWN("seats.reservations.read.own"), CHECK_IN("seats.reservations.read.own"),
+        LEAVE_SEAT("seats.reservations.read.own"),
+        DISPLAY_CHECK_IN_CODE("spaces.write");
         private final String permission;
         Action(String permission) { this.permission = permission; }
         public String permission() { return permission; }

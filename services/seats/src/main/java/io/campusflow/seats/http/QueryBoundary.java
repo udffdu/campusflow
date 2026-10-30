@@ -18,7 +18,10 @@ public final class QueryBoundary extends OncePerRequestFilter {
     @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain) throws ServletException,IOException {
         String id=UUID.randomUUID().toString(); request.setAttribute("m1.requestId",id);
         response.setHeader("X-Request-ID",id); response.setHeader("Cache-Control","no-store");
-        if(!request.getMethod().equals("GET") && !(request.getMethod().equals("POST") && request.getRequestURI().equals("/api/m1/v1/reservations") && permit.getIfAvailable()!=null)) {
+        boolean protectedPost=request.getMethod().equals("POST") && permit.getIfAvailable()!=null
+                && (request.getRequestURI().equals("/api/m1/v1/reservations")
+                || request.getRequestURI().matches("/api/m1/v1/reservations/[0-9a-fA-F-]{36}/(?:check-in|leave-seat)"));
+        if(!request.getMethod().equals("GET") && !protectedPost) {
             response.setStatus(405); response.setHeader("Allow","GET"); response.setContentType("application/json");
             json.writeValue(response.getOutputStream(),Map.of("code","READ_ONLY","message","当前仅支持查询，预约暂未开放","requestId",id));
             return;

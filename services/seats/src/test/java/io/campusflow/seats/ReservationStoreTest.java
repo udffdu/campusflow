@@ -48,7 +48,7 @@ class ReservationStoreTest {
         dataSource = postgres.getPostgresDatabase();
         jdbc = new JdbcTemplate(dataSource);
         flyway = Flyway.configure().dataSource(dataSource).schemas("m1").defaultSchema("m1").load();
-        assertEquals(1, flyway.migrate().migrationsExecuted);
+        assertEquals(2, flyway.migrate().migrationsExecuted);
     }
 
     @AfterAll static void closeDatabase() throws Exception {
@@ -56,7 +56,7 @@ class ReservationStoreTest {
     }
 
     @BeforeEach void reset() {
-        jdbc.execute("truncate m1.outbox_events, m1.reservation_requests, m1.reservations");
+        jdbc.execute("truncate m1.checkin_rate_limits, m1.reservation_transitions, m1.outbox_events, m1.reservation_requests, m1.reservations");
         store = store(CLOCK, Duration.ofSeconds(2));
     }
 

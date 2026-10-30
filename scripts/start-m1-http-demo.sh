@@ -8,4 +8,5 @@ else
   bash scripts/prepare-m1-http.sh
 fi
 # Prompt for the temporary password here, never in a command line or repository file.
-exec python3 scripts/check_m1_http.py --demo "$@"
+# exec python3 scripts/check_m1_http.py --demo "$@"
+exec python scripts/check_m1_http.py --demo "$@"

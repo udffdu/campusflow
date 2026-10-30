@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -92,8 +93,9 @@ def main():
                 raise RuntimeError(f"Mutation target changed: {name}; review the experiment")
             source.write_text(text.replace(before, after), encoding="utf-8")
             with (output / f"{name}.log").open("w", encoding="utf-8") as log:
+                maven = os.environ.get("CF_MAVEN_EXECUTABLE", str(ROOT / "services/platform/mvnw"))
                 run = subprocess.run(
-                    [str(ROOT / "services/platform/mvnw"), "-o", "-B", "-ntp",
+                    [maven, "-o", "-B", "-ntp",
                      "-f", str(copy / "pom.xml"), "-Dtest=" + test_selector, "test"],
                     cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=180)
             failed_tests = []

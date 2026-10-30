@@ -56,6 +56,15 @@ public final class ReservationStore {
     }
 
     public record CreationResult(ReservationRecord reservation,boolean replayed) {}
+    public record CheckInResult(ReservationRecord reservation, boolean idempotent) {}
+    public record UsageResult(ReservationRecord reservation, boolean idempotent) {}
+    public record UsageSession(ReservationRecord reservation, Instant checkedInAt,
+                               Instant completedAt, Instant serverTime) {}
+
+    private record CheckInAttempt(ReservationRecord reservation, boolean idempotent, CheckInException.Code error) {
+        static CheckInAttempt failed(CheckInException.Code error) { return new CheckInAttempt(null, false, error); }
+    }
+    private record RateLimit(Instant windowStartedAt, int failures, Instant blockedUntil) {}
 
     /** Authorization runs under the locks even on replay; fresh metadata validation runs only on new requests. */
     public CreationResult createValidated(ReservationIntent request,String idempotencyKey,Runnable authorize,LongSupplier validateNew) {
@@ -120,6 +129,191 @@ public final class ReservationStore {
         }
     }
 
+    /**
+     * Authenticated owner check-in. The preliminary row only supplies immutable lock keys; ownership,
+     * authorization, status, version and code are all checked again while holding the locks.
+     */
+    public CheckInResult checkIn(UUID userId, UUID reservationId, String code,
+                                 DailyCheckInCode codes, Runnable authorize) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(reservationId, "reservationId");
+        Objects.requireNonNull(codes, "codes");
+        Objects.requireNonNull(authorize, "authorize");
+        try {
+            ReservationRecord preliminary = findForUser(userId, reservationId)
+                    .orElseThrow(() -> new CheckInException(CheckInException.Code.RESERVATION_NOT_FOUND));
+            CheckInAttempt attempt = transaction.execute(ignored -> {
+                jdbc.queryForObject("select set_config('lock_timeout', ?, true)", String.class,
+                        lockTimeoutMillis + "ms");
+                locks.lockUserAndRoom(preliminary.userId(), preliminary.roomId());
+                authorize.run();
+                ReservationRecord current = findForUser(userId, reservationId)
+                        .orElseThrow(() -> new CheckInException(CheckInException.Code.RESERVATION_NOT_FOUND));
+                if (!current.roomId().equals(preliminary.roomId())) {
+                    throw new IllegalStateException("预约不可变关联已改变");
+                }
+                if (current.status() == ReservationStatus.CHECKED_IN) {
+                    return new CheckInAttempt(current, true, null);
+                }
+                if (current.status() != ReservationStatus.CONFIRMED) {
+                    return CheckInAttempt.failed(CheckInException.Code.CHECK_IN_STATE_CONFLICT);
+                }
+                Instant now = clock.instant();
+                RateLimit limit = rateLimit(userId, reservationId);
+                if (limit != null && limit.blockedUntil() != null && limit.blockedUntil().isAfter(now)) {
+                    return CheckInAttempt.failed(CheckInException.Code.CHECK_IN_RATE_LIMITED);
+                }
+                if (!codes.matchesCurrent(current.roomId(), code)) {
+                    return CheckInAttempt.failed(recordFailure(userId, reservationId, limit, now));
+                }
+
+                long nextVersion = current.version() + 1;
+                int changed = jdbc.update("""
+                        update m1.reservations set status='CHECKED_IN',version=?,updated_at=?
+                        where id=? and user_id=? and status='CONFIRMED' and version=?
+                        """, nextVersion, Timestamp.from(now), reservationId, userId, current.version());
+                if (changed != 1) throw new IllegalStateException("签到状态条件更新失败");
+                jdbc.update("""
+                        insert into m1.reservation_transitions
+                        (transition_id,reservation_id,from_status,to_status,reason,actor_user_id,reservation_version,occurred_at)
+                        values (?,?,'CONFIRMED','CHECKED_IN','USER_CHECK_IN',?,?,?)
+                        """, UUID.randomUUID(), reservationId, userId, nextVersion, Timestamp.from(now));
+                jdbc.update("""
+                        insert into m1.outbox_events(event_id,reservation_id,event_type,payload,created_at)
+                        values (?,?,'RESERVATION_CHECKED_IN',jsonb_build_object(
+                          'reservationId',cast(? as text),'userId',cast(? as text),'roomId',cast(? as text),
+                          'seatId',cast(? as text),'checkedInAt',cast(? as text),'version',?),?)
+                        """, UUID.randomUUID(), reservationId, reservationId.toString(), userId.toString(),
+                        current.roomId().toString(), current.seatId().toString(), now.toString(), nextVersion,
+                        Timestamp.from(now));
+                jdbc.update("delete from m1.checkin_rate_limits where user_id=? and reservation_id=?",
+                        userId, reservationId);
+                return new CheckInAttempt(findForUser(userId, reservationId).orElseThrow(), false, null);
+            });
+            if (attempt == null) throw new IllegalStateException("签到事务未返回结果");
+            if (attempt.error() != null) throw new CheckInException(attempt.error());
+            return new CheckInResult(attempt.reservation(), attempt.idempotent());
+        } catch (DataAccessException exception) {
+            throw persistenceFailure(exception);
+        }
+    }
+
+    /** Authenticated owner ends an active seat session. The transition and lifecycle fact are atomic. */
+    public UsageResult leaveSeat(UUID userId, UUID reservationId, Runnable authorize) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(reservationId, "reservationId");
+        Objects.requireNonNull(authorize, "authorize");
+        try {
+            ReservationRecord preliminary = findForUser(userId, reservationId)
+                    .orElseThrow(() -> new CheckInException(CheckInException.Code.RESERVATION_NOT_FOUND));
+            UsageResult result = transaction.execute(ignored -> {
+                jdbc.queryForObject("select set_config('lock_timeout', ?, true)", String.class,
+                        lockTimeoutMillis + "ms");
+                locks.lockUserAndRoom(preliminary.userId(), preliminary.roomId());
+                authorize.run();
+                ReservationRecord current = findForUser(userId, reservationId)
+                        .orElseThrow(() -> new CheckInException(CheckInException.Code.RESERVATION_NOT_FOUND));
+                if (!current.roomId().equals(preliminary.roomId())) {
+                    throw new IllegalStateException("预约不可变关联已改变");
+                }
+                if (current.status() == ReservationStatus.COMPLETED) {
+                    return new UsageResult(current, true);
+                }
+                if (current.status() != ReservationStatus.CHECKED_IN) {
+                    throw new CheckInException(CheckInException.Code.LEAVE_SEAT_STATE_CONFLICT);
+                }
+                Instant now = clock.instant();
+                long nextVersion = current.version() + 1;
+                int changed = jdbc.update("""
+                        update m1.reservations set status='COMPLETED',version=?,updated_at=?
+                        where id=? and user_id=? and status='CHECKED_IN' and version=?
+                        """, nextVersion, Timestamp.from(now), reservationId, userId, current.version());
+                if (changed != 1) throw new IllegalStateException("退座状态条件更新失败");
+                jdbc.update("""
+                        insert into m1.reservation_transitions
+                        (transition_id,reservation_id,from_status,to_status,reason,actor_user_id,reservation_version,occurred_at)
+                        values (?,?,'CHECKED_IN','COMPLETED','USER_LEAVE_SEAT',?,?,?)
+                        """, UUID.randomUUID(), reservationId, userId, nextVersion, Timestamp.from(now));
+                jdbc.update("""
+                        insert into m1.outbox_events(event_id,reservation_id,event_type,payload,created_at)
+                        values (?,?,'RESERVATION_COMPLETED',jsonb_build_object(
+                          'reservationId',cast(? as text),'userId',cast(? as text),'roomId',cast(? as text),
+                          'seatId',cast(? as text),'completedAt',cast(? as text),'reason','USER_LEAVE_SEAT','version',?),?)
+                        """, UUID.randomUUID(), reservationId, reservationId.toString(), userId.toString(),
+                        current.roomId().toString(), current.seatId().toString(), now.toString(), nextVersion,
+                        Timestamp.from(now));
+                return new UsageResult(findForUser(userId, reservationId).orElseThrow(), false);
+            });
+            if (result == null) throw new IllegalStateException("退座事务未返回结果");
+            return result;
+        } catch (DataAccessException exception) {
+            throw persistenceFailure(exception);
+        }
+    }
+
+    /** Read the persisted usage timeline for the authenticated owner; no client clock is trusted. */
+    public UsageSession usageForUser(UUID userId, UUID reservationId) {
+        ReservationRecord reservation = findForUser(userId, reservationId)
+                .orElseThrow(() -> new CheckInException(CheckInException.Code.RESERVATION_NOT_FOUND));
+        if (reservation.status() != ReservationStatus.CHECKED_IN
+                && reservation.status() != ReservationStatus.COMPLETED) {
+            throw new CheckInException(CheckInException.Code.LEAVE_SEAT_STATE_CONFLICT);
+        }
+        var times = jdbc.queryForObject("""
+                select max(occurred_at) filter (where to_status='CHECKED_IN') as checked_in_at,
+                       max(occurred_at) filter (where to_status='COMPLETED') as completed_at
+                from m1.reservation_transitions where reservation_id=?
+                """, (row, index) -> new UsageTimes(
+                row.getTimestamp("checked_in_at") == null ? null : row.getTimestamp("checked_in_at").toInstant(),
+                row.getTimestamp("completed_at") == null ? null : row.getTimestamp("completed_at").toInstant()),
+                reservationId);
+        if (times == null || times.checkedInAt() == null) {
+            throw new ReservationPersistenceException(STORAGE_UNAVAILABLE);
+        }
+        return new UsageSession(reservation, times.checkedInAt(), times.completedAt(), clock.instant());
+    }
+
+    private RateLimit rateLimit(UUID userId, UUID reservationId) {
+        return jdbc.query("""
+                select window_started_at,failures,blocked_until from m1.checkin_rate_limits
+                where user_id=? and reservation_id=? for update
+                """, (row, index) -> new RateLimit(row.getTimestamp(1).toInstant(), row.getInt(2),
+                        row.getTimestamp(3) == null ? null : row.getTimestamp(3).toInstant()),
+                userId, reservationId).stream().findFirst().orElse(null);
+    }
+
+    private CheckInException.Code recordFailure(UUID userId, UUID reservationId, RateLimit previous, Instant now) {
+        Instant windowStart = now;
+        int failures = 1;
+        if (previous != null && previous.windowStartedAt().isAfter(now.minus(Duration.ofMinutes(15)))) {
+            windowStart = previous.windowStartedAt();
+            failures = previous.failures() + 1;
+        }
+        failures = Math.min(failures, 5);
+        Instant blockedUntil = failures >= 5 ? now.plus(Duration.ofMinutes(15)) : null;
+        jdbc.update("""
+                insert into m1.checkin_rate_limits
+                    (user_id,reservation_id,window_started_at,failures,blocked_until,updated_at)
+                values (?,?,?,?,?,?)
+                on conflict (user_id,reservation_id) do update set
+                    window_started_at=excluded.window_started_at,failures=excluded.failures,
+                    blocked_until=excluded.blocked_until,updated_at=excluded.updated_at
+                """, userId, reservationId, Timestamp.from(windowStart), failures,
+                blockedUntil == null ? null : Timestamp.from(blockedUntil), Timestamp.from(now));
+        return blockedUntil == null ? CheckInException.Code.CHECK_IN_CODE_INVALID
+                : CheckInException.Code.CHECK_IN_RATE_LIMITED;
+    }
+
+    private static ReservationPersistenceException persistenceFailure(DataAccessException exception) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql && ("55P03".equals(sql.getSQLState())
+                    || "40P01".equals(sql.getSQLState()) || "40001".equals(sql.getSQLState()))) {
+                return new ReservationPersistenceException(STORAGE_UNAVAILABLE, exception);
+            }
+        }
+        return new ReservationPersistenceException(STORAGE_UNAVAILABLE, exception);
+    }
+
     /** The caller still must authenticate this user; a missing or foreign record is indistinguishable. */
     public Optional<ReservationRecord> findForUser(UUID userId, UUID reservationId) {
         return jdbc.query("select * from m1.reservations where user_id=? and id=?", ReservationStore::map,
@@ -182,6 +376,7 @@ public final class ReservationStore {
     }
 
     private record OccupancyFact(boolean userConflict, UUID seatId) {}
+    private record UsageTimes(Instant checkedInAt, Instant completedAt) {}
 
     private boolean conflicts(String field, UUID value, TimeRange period) {
         if (!field.equals("user_id") && !field.equals("seat_id")) throw new IllegalArgumentException("Invalid field");

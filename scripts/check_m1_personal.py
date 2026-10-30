@@ -39,6 +39,7 @@ def start_jar(stack, env, port, logs, name):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--preview',action='store_true')
+    parser.add_argument('--preflight',action='store_true',help=argparse.SUPPRESS)
     parser.add_argument('--d-port',type=int,default=18280);parser.add_argument('--m1-port',type=int,default=18281);parser.add_argument('--web-port',type=int,default=5374)
     args=parser.parse_args();dport,mport=(args.d_port,args.m1_port) if args.preview else (free_port(),free_port())
     while mport==dport:mport=free_port()
@@ -47,15 +48,20 @@ def main():
     origin=f'http://[::1]:{args.web_port}'
     if args.preview:
         with socket.socket(socket.AF_INET6) as probe:probe.bind(('::1',args.web_port))
+    if args.preflight:
+        print(f'预览端口可用：D {dport} / M1 {mport} / Web {args.web_port}')
+        return
     password=getpass.getpass('设置本次个人预约预览临时密码（不回显）：') if args.preview else secrets.token_urlsafe(24)
     if not 12<=len(password.encode())<=72:raise RuntimeError('密码须为12～72字节')
-    env={k:v for k,v in os.environ.items() if not k.startswith(('M1_','SPRING_','DATABASE_','BOOTSTRAP_','COOKIE_')) and k not in ('PORT','M2_SERVICE_KEY','M3_SERVICE_KEY')}
-    key=secrets.token_urlsafe(40);csrf=base64.b64encode(secrets.token_bytes(32)).decode()
+    env={k:v for k,v in os.environ.items()
+         if not k.startswith(('M1_','SPRING_','DATABASE_','BOOTSTRAP_','COOKIE_','LOGGING_'))
+         and k not in ('PORT','M2_SERVICE_KEY','M3_SERVICE_KEY','DEBUG','TRACE')}
+    key=secrets.token_urlsafe(40);csrf=base64.b64encode(secrets.token_bytes(32)).decode();checkin=base64.b64encode(secrets.token_bytes(32)).decode()
     env.update(BOOTSTRAP_ADMIN_PASSWORD=password,M1_D_BASE_URL=f'http://127.0.0.1:{dport}',M1_SERVICE_KEY=key,
-               M1_ADVANCE_MODE='CALENDAR_DAYS',M1_MAX_ADVANCE='PT24H',M1_MAX_DURATION='PT4H',M1_WRITE_ENABLED='true',M1_BROWSER_ORIGIN=origin,M1_CSRF_SECRET=csrf)
+               M1_ADVANCE_MODE='CALENDAR_DAYS',M1_MAX_ADVANCE='PT24H',M1_MAX_DURATION='PT4H',M1_WRITE_ENABLED='true',M1_BROWSER_ORIGIN=origin,M1_CSRF_SECRET=csrf,M1_CHECKIN_SECRET=checkin)
     logs=ROOT/'tmp'/('m1-personal-'+str(time.time_ns()));logs.mkdir(parents=True)
     with ExitStack() as stack:
-        folder=ROOT/'services/seats';cp=os.pathsep.join([str(folder/'target/test-classes'),str(folder/'target/classes'),(folder/'target/http-classpath.txt').read_text().strip()])
+        folder=ROOT/'services/seats';cp=os.pathsep.join([str(folder/'target/test-classes'),str(folder/'target/classes'),(folder/'target/http-classpath.txt').read_text(encoding='utf-8').strip()])
         java=str(Path(env['JAVA_HOME'])/'bin/java') if env.get('JAVA_HOME') else 'java'
         database=Process([java,'-cp',cp,'io.campusflow.seats.DatabaseFixture'],env,logs/'database.log');stack.callback(database.close)
         env.update(M1_DATABASE_URL=database.command({'op':'connection'})['url'],M1_DATABASE_USER='postgres',M1_DATABASE_PASSWORD='')
@@ -63,6 +69,14 @@ def main():
         d_base=f'http://127.0.0.1:{dport}';m_base=f'http://127.0.0.1:{mport}'
         admin,users,data=seed(d_base,password,many=False)
         if args.preview:
+            student=BrowserHTTP(d_base);student.login('student',password)
+            preview_start=(datetime.now(timezone(timedelta(hours=8)))+timedelta(days=1)).replace(hour=22,minute=0,second=0,microsecond=0)
+            preview_body=dict(roomId=data['room']['id'],seatId=data['seats'][0]['id'],
+                              startAt=preview_start.astimezone(timezone.utc).isoformat().replace('+00:00','Z'),
+                              endAt=(preview_start+timedelta(hours=1)).astimezone(timezone.utc).isoformat().replace('+00:00','Z'))
+            preview_csrf=student.request('/api/m1/v1/csrf',base=m_base)[1]['token']
+            preview_reservation=student.request('/api/m1/v1/reservations','POST',preview_body,201,base=m_base,
+                headers={'Origin':origin,'Idempotency-Key':'preview-ready-check-in','X-M1-CSRF-Token':preview_csrf})[1]
             web_env={k:v for k,v in env.items() if not k.startswith(('M1_','BOOTSTRAP_'))};web_env.update(D_PROXY_TARGET=d_base,M1_PROXY_TARGET=m_base)
             web=Process(['npm','run','dev','--','--host','::1','--port',str(args.web_port),'--strictPort'],web_env,logs/'web.log',ROOT/'apps/web',fixture=False);stack.callback(web.close)
             opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -72,7 +86,7 @@ def main():
                     if web.process.poll() is not None:raise RuntimeError('个人预约前端启动失败')
                     time.sleep(.1)
             else:raise RuntimeError('个人预约前端启动超时')
-            print(f'普通M1个人预约预览：{origin}/seat-reservations\n账号student，密码为终端设置值；M1以生产jar运行，数据库为独立临时数据。\n当前只校验个人预约，整室申请/维修限制尚未接入；未部署或正式发布。\n使用[::1]隔离旧演示Cookie；保留终端，Ctrl+C只清理本次预览。',flush=True)
+            print(f'普通M1个人预约/签到预览：{origin}/my-reservations\n学生账号student、空间管理员账号manager，密码均为终端设置值。\n已为student准备一条A101预约；当前体验阶段不限制签到时间，正确签到后进入计时与退座页面。\nmanager可在空间资源的A101详情打开签到码显示页。M1以生产jar运行，数据库为独立临时数据；整室申请/维修限制尚未接入。\n使用[::1]隔离旧演示Cookie；保留终端，Ctrl+C只清理本次预览。',flush=True)
             while all(p.process.poll() is None for p in (personal,d,web,database)):time.sleep(1)
             raise RuntimeError('预览服务意外退出')
         closed_port=free_port();closed_env=dict(env,M1_WRITE_ENABLED='false',M1_PERSONAL_DEMO='true')
@@ -90,6 +104,13 @@ def main():
         body=dict(roomId=data['room']['id'],seatId=data['seats'][0]['id'],startAt=tomorrow.astimezone(timezone.utc).isoformat().replace('+00:00','Z'),endAt=(tomorrow+timedelta(hours=1)).astimezone(timezone.utc).isoformat().replace('+00:00','Z'))
         saved=post(body,'calendar-tomorrow')
         check('ordinary jar permits tomorrow before day boundary',lambda:equal(saved['status'],'CONFIRMED'))
+        display=admin.request('/api/m1/v1/rooms/'+data['room']['id']+'/check-in-code',base=m_base)[1]
+        check('authorized room display returns a six digit Shanghai daily code',lambda:equal((display['roomId'],len(display['code']),display['timeZone']),(data['room']['id'],6,'Asia/Shanghai')))
+        checkin_token=own('csrf')['token']
+        checked=student.request('/api/m1/v1/reservations/'+saved['id']+'/check-in','POST',{'code':display['code']},base=m_base,headers={'Origin':origin,'X-M1-CSRF-Token':checkin_token})[1]
+        check('ordinary jar checks in the authenticated owner without a time window',lambda:equal((checked['status'],checked['version'],checked['idempotent']),('CHECKED_IN',2,False)))
+        replayed_checkin=student.request('/api/m1/v1/reservations/'+saved['id']+'/check-in','POST',{'code':'invalid'},base=m_base,headers={'Origin':origin,'X-M1-CSRF-Token':checkin_token})[1]
+        check('repeated owner check-in is idempotent without another transition',lambda:equal((replayed_checkin['status'],replayed_checkin['version'],replayed_checkin['idempotent']),('CHECKED_IN',2,True)))
         after=(tomorrow+timedelta(days=1)).replace(hour=0);bad=dict(body,startAt=after.astimezone(timezone.utc).isoformat().replace('+00:00','Z'),endAt=(after+timedelta(hours=1)).astimezone(timezone.utc).isoformat().replace('+00:00','Z'))
         check('ordinary jar rejects day after tomorrow start',lambda:equal(post(bad,'calendar-too-far',status=400)['code'],'ADVANCE_WINDOW'))
         old_token=own('csrf')['token'];before=database.command({'op':'snapshot'});personal.close()
@@ -101,9 +122,11 @@ def main():
         database.command({'op':'stopDatabase'})
         check('ordinary jar database failure -> 503',lambda:own('reservations',503))
         d.close();check('ordinary jar D offline -> 503',lambda:own('reservation-capabilities',503))
+        protected={'preview password':password,'service key':key,'CSRF secret':csrf,'check-in secret':checkin}
         for file in logs.glob('*.log'):
-            content=file.read_text()
-            if any(secret in content for secret in (password,key,csrf,env['M1_CSRF_SECRET'])):raise RuntimeError('credential unexpectedly present in local diagnostics')
+            content=file.read_text(encoding='utf-8',errors='replace')
+            leaked=[label for label,secret in protected.items() if secret in content]
+            if leaked:raise RuntimeError(f'{file.name} unexpectedly contains protected diagnostics: {", ".join(leaked)}')
         print(json.dumps({'ordinary_jar_checks':len(done),'result':'passed','m1_entrypoint':'java -jar; no test configuration','advance_mode':'CALENDAR_DAYS','m2_m3_integrated':False,'browser_checked':False}))
 
 

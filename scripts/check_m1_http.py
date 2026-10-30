@@ -44,11 +44,28 @@ def check_ports(ports):
 class Process:
     def __init__(self, command, env, log, cwd=ROOT, fixture=True):
         self.fixture = fixture
-        self.log = open(log, 'w')
+        self.log = open(log, 'w', encoding='utf-8', errors='replace')
         self.reply = queue.Queue()
         self.ready = threading.Event()
-        self.process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, start_new_session=True)
+        child_env = dict(env)
+        runtime = ROOT / 'tmp' / 'runtime'
+        java_tmp = runtime / 'temp'
+        pg_cache = runtime / 'embedded-pg'
+        user_home = runtime / 'home'
+        for directory in (java_tmp, pg_cache, user_home):
+            directory.mkdir(parents=True, exist_ok=True)
+        # Keep embedded PostgreSQL binaries, clusters and Java temp files inside this checkout.
+        java_options = child_env.get('JAVA_TOOL_OPTIONS', '').strip()
+        java_options += (' ' if java_options else '') + ' '.join((
+            f'-Djava.io.tmpdir={java_tmp.as_posix()}',
+            f'-Duser.home={user_home.as_posix()}',
+            f'-Dot.epg.cache-dir={pg_cache.as_posix()}',
+            f'-Dot.epg.working-dir={java_tmp.as_posix()}',
+        ))
+        child_env['JAVA_TOOL_OPTIONS'] = java_options
+        self.process = subprocess.Popen(command, cwd=cwd, env=child_env, stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                        encoding='utf-8', errors='replace', bufsize=1, start_new_session=True)
         def drain():
             for line in self.process.stdout:
                 # These services never log cookie/header/request bodies. Keep only local diagnostic output.
@@ -76,19 +93,33 @@ class Process:
                 if self.fixture:
                     self.process.stdin.write('STOP\n')
                     self.process.stdin.flush()
+                elif os.name == 'nt':
+                    subprocess.run(['taskkill', '/PID', str(self.process.pid), '/T', '/F'],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   check=False, timeout=10)
                 else:
                     os.killpg(self.process.pid, signal.SIGTERM)
                 self.process.wait(timeout=8)
             except (OSError, subprocess.TimeoutExpired):
                 # Only this explicitly spawned process group, including its own PG/Vite children.
                 try:
-                    os.killpg(self.process.pid, signal.SIGTERM)
-                except ProcessLookupError:
+                    if os.name == 'nt':
+                        subprocess.run(['taskkill', '/PID', str(self.process.pid), '/T', '/F'],
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                       check=False, timeout=10)
+                    else:
+                        os.killpg(self.process.pid, signal.SIGTERM)
+                except (OSError, subprocess.TimeoutExpired, ProcessLookupError):
                     pass
                 try:
                     self.process.wait(timeout=8)
                 except subprocess.TimeoutExpired:
-                    os.killpg(self.process.pid, signal.SIGKILL)
+                    if os.name == 'nt':
+                        subprocess.run(['taskkill', '/PID', str(self.process.pid), '/T', '/F'],
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                       check=False, timeout=10)
+                    else:
+                        os.killpg(self.process.pid, signal.SIGKILL)
                     self.process.wait(timeout=5)
         self.reader.join(timeout=2)
         if not self.log.closed:
@@ -134,7 +165,7 @@ def launch(stack, module, port, env, logdir, **extra):
     classpath = folder / 'target/http-classpath.txt'
     if not classpath.exists():
         raise RuntimeError('请先运行 bash scripts/prepare-m1-http.sh')
-    cp = os.pathsep.join([str(folder / 'target/test-classes'), str(folder / 'target/classes'), classpath.read_text().strip()])
+    cp = os.pathsep.join([str(folder / 'target/test-classes'), str(folder / 'target/classes'), classpath.read_text(encoding='utf-8').strip()])
     java = str(Path(env['JAVA_HOME']) / 'bin/java') if env.get('JAVA_HOME') else 'java'
     child = dict(env, **{k: str(v) for k, v in extra.items()})
     child.update({'PORT' if module == 'platform' else 'M1_PORT': str(port)})
@@ -283,7 +314,7 @@ def main():
     env = dict(os.environ)
     # No inherited Spring/DB/credential overrides from the existing snapshot demo.
     for k in list(env):
-        if k.startswith(('SPRING_', 'M1_', 'DATABASE_', 'BOOTSTRAP_', 'COOKIE_')) or k in ('M2_SERVICE_KEY','M3_SERVICE_KEY','PORT'):
+        if k.startswith(('SPRING_', 'M1_', 'DATABASE_', 'BOOTSTRAP_', 'COOKIE_', 'LOGGING_')) or k in ('M2_SERVICE_KEY','M3_SERVICE_KEY','PORT','DEBUG','TRACE'):
             del env[k]
     env.update(BOOTSTRAP_ADMIN_PASSWORD=password, M1_SERVICE_KEY=key, M1_D_BASE_URL=f'http://127.0.0.1:{dport}',
                M1_ADVANCE_MODE='ROLLING',M1_MAX_ADVANCE='PT24H', M1_MAX_DURATION='PT4H')
@@ -344,7 +375,7 @@ def main():
             completed.append('real D process unavailable -> M1 503')
             print('PASS ' + completed[-1])
             for log in logdir.glob('*.log'):
-                output = log.read_text()
+                output = log.read_text(encoding='utf-8', errors='replace')
                 if password in output or key in output:
                     raise RuntimeError('fixture log unexpectedly contains a credential')
             print(json.dumps({'real_tcp_checks':len(completed),'result':'passed','modules':['D','M1'],'databases':'independent temporary PostgreSQL','browser_checked':args.browser_check}))

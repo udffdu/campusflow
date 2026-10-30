@@ -66,13 +66,14 @@ class QueryHttpTest {
                 "--server.port=0","--spring.datasource.url="+pg.getJdbcUrl("postgres","postgres"),"--spring.datasource.username=postgres",
                 "--m1.d-base-url=http://127.0.0.1:"+upstream.getAddress().getPort(),"--m1.service-key="+KEY,
                 "--m1.write-enabled=true","--m1.advance-mode=CALENDAR_DAYS","--m1.max-advance=PT24H","--m1.max-duration=PT4H",
-                "--m1.browser-origin=https://campus.example","--m1.csrf-secret="+Base64.getEncoder().encodeToString(new byte[32]));
+                "--m1.browser-origin=https://campus.example","--m1.csrf-secret="+Base64.getEncoder().encodeToString(new byte[32]),
+                "--m1.checkin-secret="+Base64.getEncoder().encodeToString("c".repeat(32).getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
         personalBase="http://127.0.0.1:"+personalApp.getWebServer().getPort();
     }
     @AfterAll void stop() throws Exception {if(personalApp!=null)personalApp.close();if(demoApp!=null)demoApp.close();if(app!=null)app.close();if(pg!=null)pg.close();if(upstream!=null)upstream.stop(0);if(workers!=null)workers.shutdownNow();}
     @BeforeEach void reset() {
         calls.clear();responder=this::normal;
-        new JdbcTemplate(pg.getPostgresDatabase()).execute("truncate m1.outbox_events,m1.reservation_requests,m1.reservations");
+        new JdbcTemplate(pg.getPostgresDatabase()).execute("truncate m1.checkin_rate_limits,m1.reservation_transitions,m1.outbox_events,m1.reservation_requests,m1.reservations");
     }
     private Map<String,Object> identity(boolean allowed,Set<String> permissions) {
         return Map.of("allowed",allowed,"identity",Map.of("id",user,"departmentId",dept,"active",true,"permissions",permissions));
@@ -89,8 +90,8 @@ class QueryHttpTest {
     private Reply normal(HttpExchange e) {
         String path=e.getRequestURI().getPath();
         if(path.endsWith("authorization")){
-            try {JsonNode input=json.readTree(e.getRequestBody());assertTrue(Set.of("seats.availability.read","seats.reservations.create","seats.reservations.read.own").contains(input.path("permission").asText()));assertEquals(TOKEN,input.path("sessionToken").asText());}catch(Exception ex){throw new RuntimeException(ex);}
-            return new Reply(identity(true,Set.of(DQueryClient.PERMISSION,"seats.reservations.create","seats.reservations.read.own")));
+            try {JsonNode input=json.readTree(e.getRequestBody());assertTrue(Set.of("seats.availability.read","seats.reservations.create","seats.reservations.read.own","spaces.write").contains(input.path("permission").asText()));assertEquals(TOKEN,input.path("sessionToken").asText());}catch(Exception ex){throw new RuntimeException(ex);}
+            return new Reply(identity(true,Set.of(DQueryClient.PERMISSION,"seats.reservations.create","seats.reservations.read.own","spaces.write")));
         }
         if(path.endsWith(room.toString()))return new Reply(roomResource());
         if(path.endsWith(seat.toString()))return new Reply(seatResource());
@@ -259,6 +260,12 @@ class QueryHttpTest {
         if(csrf!=null)builder.header("X-M1-CSRF-Token",csrf);
         return http.send(builder.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(intent()))).build(),HttpResponse.BodyHandlers.ofString());
     }
+    private HttpResponse<String> personalCheckIn(UUID id,String code,String csrf,String origin)throws Exception {
+        var builder=HttpRequest.newBuilder(URI.create(personalBase+"/api/m1/v1/reservations/"+id+"/check-in"))
+                .header("Cookie","CF_SESSION="+TOKEN).header("Content-Type","application/json");
+        if(csrf!=null)builder.header("X-M1-CSRF-Token",csrf);if(origin!=null)builder.header("Origin",origin);
+        return http.send(builder.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("code",code)))).build(),HttpResponse.BodyHandlers.ofString());
+    }
     @Test void ordinaryApplicationCreatesWithoutAnyTestConfiguration()throws Exception {
         assertEquals(0,personalApp.getBeansOfType(DemoFixtureConfiguration.class).size());
         var caps=body(personalGet("/api/m1/v1/reservation-capabilities"));assertTrue(caps.path("canCreateReservation").asBoolean());assertFalse(caps.path("canCreateDemoReservation").asBoolean(true));assertEquals("CALENDAR_DAYS",caps.path("advanceMode").asText());
@@ -272,6 +279,31 @@ class QueryHttpTest {
         assertEquals(403,personalPost(null,"https://campus.example").statusCode());assertEquals(403,personalPost(token,"https://evil.example").statusCode());
         responder=e->e.getRequestURI().getPath().endsWith("authorization")?new Reply(identity(false,Set.of(DQueryClient.PERMISSION))):normal(e);
         assertEquals(403,personalPost(token,"https://campus.example").statusCode());counts(0);
+    }
+    @Test void ordinaryOwnerChecksInOnceThroughProtectedHttp()throws Exception {
+        String token=body(personalGet("/api/m1/v1/csrf")).path("token").asText();
+        var created=personalPost(token,"https://campus.example");UUID id=UUID.fromString(body(created).path("id").asText());
+        Instant start=Instant.now().minusSeconds(1);new JdbcTemplate(pg.getPostgresDatabase()).update("update m1.reservations set start_at=?,end_at=? where id=?",java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),id);
+        var codes=new DailyCheckInCode("c".repeat(32).getBytes(java.nio.charset.StandardCharsets.US_ASCII),Clock.systemUTC());String code=codes.current(room).code();
+        var checked=personalCheckIn(id,code,token,"https://campus.example");assertEquals(200,checked.statusCode(),checked.body());assertEquals("CHECKED_IN",body(checked).path("status").asText());assertFalse(body(checked).path("idempotent").asBoolean(true));
+        var replay=personalCheckIn(id,"invalid",token,"https://campus.example");assertEquals(200,replay.statusCode(),replay.body());assertTrue(body(replay).path("idempotent").asBoolean());
+        var jdbc=new JdbcTemplate(pg.getPostgresDatabase());assertEquals(1,jdbc.queryForObject("select count(*) from m1.reservation_transitions",Integer.class));assertEquals(1,jdbc.queryForObject("select count(*) from m1.outbox_events where event_type='RESERVATION_CHECKED_IN'",Integer.class));assertFalse(checked.body().contains(code));
+    }
+    @Test void checkInRejectsMissingCsrfForeignOwnerAndWrongCode()throws Exception {
+        String token=body(personalGet("/api/m1/v1/csrf")).path("token").asText();var record=personalApp.getBean(ReservationStore.class).create(new CreateReservation(user,room,seat,period(),1),"http-checkin");
+        Instant start=Instant.now().minusSeconds(1);new JdbcTemplate(pg.getPostgresDatabase()).update("update m1.reservations set start_at=?,end_at=? where id=?",java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),record.id());
+        assertEquals(403,personalCheckIn(record.id(),"000000",null,"https://campus.example").statusCode());
+        assertEquals(422,personalCheckIn(record.id(),"000000",token,"https://campus.example").statusCode());
+        var foreign=personalApp.getBean(ReservationStore.class).create(new CreateReservation(other,UUID.randomUUID(),UUID.randomUUID(),period(),1),"foreign-checkin");
+        assertEquals(404,personalCheckIn(foreign.id(),"000000",token,"https://campus.example").statusCode());
+    }
+    @Test void authorizedDepartmentManagerReadsDailyRoomCodeWithoutCaching()throws Exception {
+        var response=personalGet("/api/m1/v1/rooms/"+room+"/check-in-code");assertEquals(200,response.statusCode(),response.body());var value=body(response);
+        assertEquals(room.toString(),value.path("roomId").asText());assertTrue(value.path("code").asText().matches("[0-9]{6}"));assertEquals("Asia/Shanghai",value.path("timeZone").asText());assertEquals("no-store",response.headers().firstValue("Cache-Control").orElseThrow());
+        responder=e->e.getRequestURI().getPath().endsWith(room.toString())?new Reply(resource(room,"ROOM",other,"CAMPUS",Set.of(),true)):normal(e);
+        assertEquals(403,personalGet("/api/m1/v1/rooms/"+room+"/check-in-code").statusCode());
+        responder=e->{if(!e.getRequestURI().getPath().endsWith("authorization"))return normal(e);return new Reply(identity(false,Set.of("seats.reservations.read.own")));};
+        assertEquals(403,personalGet("/api/m1/v1/rooms/"+room+"/check-in-code").statusCode());
     }
 
 }

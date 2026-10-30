@@ -79,7 +79,11 @@ def checks(admin, users, data, d_base, m_base, closed_base, m1, origin, password
     admin.request('/api/v1/roles','POST',dict(code='READ_TEST',name='测试本人读取',permissions=['seats.reservations.read.own']),201)
     u=users['student']
     admin.request('/api/v1/users/'+u['id'],'PUT',dict(displayName=u['displayName'],departmentId=DEPT,roles=['READ_TEST'],active=True))
-    check('revoked creation permission rejects replay',lambda:student.request('/api/m1/v1/csrf',status=403,base=m_base))
+    read_csrf=student.request('/api/m1/v1/csrf',status=200,base=m_base)[1]['token']
+    check('own-read permission can fetch CSRF for check-in after create revocation',lambda:bool(read_csrf))
+    check('own-read permission still cannot create reservations',lambda:student.request(
+        '/api/m1/v1/reservations','POST',payload(),status=403,base=m_base,
+        headers={'Origin':origin,'Idempotency-Key':'read-only-create-denied','X-M1-CSRF-Token':read_csrf}))
     check('own-read permission still permits recovery after create revocation',lambda:equal(own(student,'reservation-requests/first')['id'],created['id']))
     admin.request('/api/v1/users/'+u['id'],'PUT',dict(displayName=u['displayName'],departmentId=DEPT,roles=['SEAT_USER'],active=True))
     update_resource(admin,data['room'],active=False)
@@ -194,7 +198,7 @@ def main():
         browser.request('/api/m1/v1/reservations',base=f'http://127.0.0.1:{closed_port}',status=503)
         done.append('history D offline -> 503, not empty');print('PASS '+done[-1])
         for file in logs.glob('*.log'):
-            text=file.read_text()
+            text=file.read_text(encoding='utf-8',errors='replace')
             if any(secret in text for secret in (password,key,csrf_secret)):raise RuntimeError('credential unexpectedly present in fixture logs')
         print(json.dumps({'real_submission_checks':len(done),'result':'passed','business_modules_implemented':['M1-A'],'d':'existing real service','m2_m3_business_implemented':False,'browser_checked':False}))
 

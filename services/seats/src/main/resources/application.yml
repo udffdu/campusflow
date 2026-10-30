@@ -20,6 +20,7 @@ m1:
   write-enabled: ${M1_WRITE_ENABLED:false}
   browser-origin: ${M1_BROWSER_ORIGIN:}
   csrf-secret: ${M1_CSRF_SECRET:}
+  checkin-secret: ${M1_CHECKIN_SECRET:}
   advance-mode: ${M1_ADVANCE_MODE:CALENDAR_DAYS}
   d-base-url: ${M1_D_BASE_URL}
   service-key: ${M1_SERVICE_KEY}

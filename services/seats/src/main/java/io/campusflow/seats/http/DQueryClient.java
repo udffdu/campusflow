@@ -62,7 +62,7 @@ public final class DQueryClient {
                 UUID user=id(identity,"id");
                 if (!bool(identity,"active")) throw QueryProblem.upstream();
                 Set<String> permissions=strings(identity,"permissions");
-                if (!allowed && requireAllowed) throw new QueryProblem(403,"FORBIDDEN","缺少座位查询权限");
+                if (!allowed && requireAllowed) throw new QueryProblem(403,"FORBIDDEN","缺少所需业务权限");
                 if (allowed && !permissions.contains(permission)) throw QueryProblem.upstream();
                 if (identity.path("departmentId").isNull())
                     throw new QueryProblem(403,"FORBIDDEN","座位查询需要有效的所属院系");

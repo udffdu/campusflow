@@ -30,7 +30,7 @@ public final class HttpFixture {
                     if(operation.equals("stopDatabase")) {pg.close();System.out.println("FIXTURE_REPLY {}");System.out.flush();continue;}
                     if(!Set.of("create","snapshot").contains(operation))throw new IllegalArgumentException("unknown fixture operation");
                     var jdbc=new JdbcTemplate(pg.getPostgresDatabase());var snapshot=new TreeMap<String,Object>();
-                    for(String table:List.of("reservations","reservation_requests","outbox_events"))
+                    for(String table:List.of("reservations","reservation_requests","outbox_events","reservation_transitions","checkin_rate_limits"))
                         snapshot.put(table,jdbc.queryForObject("select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb)::text from m1."+table+" t",String.class));
                     System.out.println("FIXTURE_REPLY "+json.writeValueAsString(snapshot));System.out.flush();
                 }
