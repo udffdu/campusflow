@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-if [ -n "${CF_PYTHON:-}" ]; then
-  CF_PYTHON_CMD="$CF_PYTHON"
-elif python3 -c 'import sys; assert sys.version_info >= (3, 11)' >/dev/null 2>&1; then
-  CF_PYTHON_CMD=python3
-elif python -c 'import sys; assert sys.version_info >= (3, 11)' >/dev/null 2>&1; then
-  CF_PYTHON_CMD=python
-else
-  echo '需要 Python 3.11 或更高版本；可通过 CF_PYTHON 指定解释器。' >&2
-  exit 1
-fi
+source scripts/resolve-python.sh
 CF_RUNTIME_DIR="$(pwd)/tmp/runtime"
 CF_RUNTIME_JAVA="$CF_RUNTIME_DIR"
 if command -v cygpath >/dev/null 2>&1; then CF_RUNTIME_JAVA="$(cygpath -m "$CF_RUNTIME_DIR")"; fi
@@ -27,7 +18,7 @@ else
   CF_MAVEN_EXECUTABLE=./services/platform/mvnw
 fi
 export CF_MAVEN_EXECUTABLE
-if ! "$CF_PYTHON_CMD" scripts/check_m1_personal.py --preview --preflight "$@"; then
+if ! "$PYTHON" scripts/check_m1_personal.py --preview --preflight "$@"; then
   echo '预览端口被占用。请回到旧预览终端按 Ctrl+C，确认其关闭后再启动。' >&2
   exit 1
 fi
@@ -39,4 +30,4 @@ if ! "$CF_MAVEN_EXECUTABLE" -B "${CF_MAVEN_ARGS[@]}" -f services/seats/pom.xml -
   exit 1
 fi
 bash scripts/prepare-m1-http.sh "${CF_MAVEN_ARGS[@]}"
-exec "$CF_PYTHON_CMD" scripts/check_m1_personal.py --preview "$@"
+exec "$PYTHON" scripts/check_m1_personal.py --preview "$@"
