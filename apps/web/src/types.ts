@@ -1,5 +1,5 @@
 export interface Page<T> { items: T[]; page: number; size: number; total: number }
-export interface Identity { id: string; username: string; displayName: string; departmentId: string; active: boolean; roles: string[]; permissions: string[] }
+export interface Identity { id: string; username: string; displayName: string; email: string|null; departmentId: string; active: boolean; roles: string[]; permissions: string[] }
 export interface Department { id: string; code: string; name: string }
 export interface Role { code: string; name: string; permissions: string[] }
 export interface OpeningHour { day: number; start: string; end: string }

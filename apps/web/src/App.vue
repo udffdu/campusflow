@@ -5,6 +5,7 @@ import { api, message } from './api'
 import { announceSessionChange, can, refreshUnread, session } from './session'
 import { roleNames } from './types'
 import Icon from './components/Icon.vue'
+import NotificationToastHost from './components/NotificationToastHost.vue'
 import {m1Get} from './m1Api'
 import {clearPendingReservations,type Capabilities} from './reservations'
 const demoAvailable=ref(false);const bookingAvailable=ref(false)
@@ -48,5 +49,6 @@ onUnmounted(() => clearInterval(poll))
       <footer class="page-footer"><span>CampusFlow · 校园资源协同平台</span><span>有序连接，共享校园</span></footer>
     </div>
     <Modal v-if="passwordOpen" title="修改登录密码" @close="passwordOpen=false;currentPassword='';newPassword='' "><form class="form-body" @submit.prevent="changePassword"><p class="muted">修改后，所有设备的会话将退出，请重新登录。</p><label>当前密码<input v-model="currentPassword" type="password" autocomplete="current-password" required maxlength="72"></label><label>新密码<input v-model="newPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="72"><small>至少 12 个字符，中文等多字节字符总计不超过 72 字节。</small></label><p v-if="error" role="alert" class="form-error">{{error}}</p><div class="form-actions"><button type="button" class="button secondary" @click="passwordOpen=false">取消</button><button class="button" :disabled="busy">{{busy?'正在保存…':'保存并重新登录'}}</button></div></form></Modal>
+    <NotificationToastHost/>
   </div>
 </template>
