@@ -1,6 +1,6 @@
 # 跨模块接口清单（待组内评审）
 
-M1当前已实现[查询](m1-query-api.md)、[普通个人预约/配置](m1-personal-api.md)、[本人历史/再次预约](m1-history-api.md)及[每日教室码、本人签到、使用计时与主动退座](m1-check-in-api.md)。正常jar可显式启用受保护个人写入，默认关闭；普通预约窗口按用户确认的上海自然日。2026-10-30 用户决定当前签到体验暂不限制签到时间，后续与未签到自动取消的最终边界仍须在 CF-M1-010 实现前重新评审。旧[隔离演示协议](m1-reservation-demo-api.md)保留供追溯，不表示普通入口仍依赖测试装配。
+M1当前已实现[查询](m1-query-api.md)、[普通个人预约/配置](m1-personal-api.md)、[本人历史/再次预约](m1-history-api.md)、[签到生命周期](m1-check-in-api.md)及[CF-M1-008/009提醒](m1-reminder-api.md)。正常jar可显式启用受保护个人写入和后台提醒，默认均关闭；普通预约窗口按用户确认的上海自然日。2026-10-30 用户决定当前签到体验暂不限制签到时间，后续与未签到自动取消的最终边界仍须在 CF-M1-010 实现前重新评审。旧[隔离演示协议](m1-reservation-demo-api.md)保留供追溯，不表示普通入口仍依赖测试装配。
 
 M2/M3内部来源接口仍是讨论稿，未实现；D已实现请求与响应以[D API v1](platform-api.md)为准，其他负责人的评审不能从文档存在推定。每模块拥有自己的契约，调用方共同评审变更，禁止共享数据库实体作为接口。总体交付/延期项见[M1-A索引](../docs/handoffs/m1-a-delivery.md)。
 
@@ -12,6 +12,7 @@ M2/M3内部来源接口仍是讨论稿，未实现；D已实现请求与响应�
 | D | `GET /internal/v1/resources/{id}` | M1/M2/M3 | 开放规则、归属、启停、版本 |
 | D | `GET /internal/v1/resources?type=SEAT&parentId={id}` | M1 | 座位属性和启停 |
 | D | `POST /internal/v1/notifications` | M1/M2/M3 | 持久化接收、事件去重、投递失败重试 |
+| D | `POST /internal/v1/email-notifications` | M1/M2/M3 | 独立邮件任务、事件去重、SMTP失败重试；真实通道需显式配置 |
 | D | `POST /internal/v1/audit` | M1/M2/M3 | 事件去重、权限、可追溯 |
 | M1 | `GET /internal/v1/rooms/{id}/availability` | M2 | 按时段预检查，不构成占用承诺 |
 | M1 | `PUT /internal/v1/room-occupancies/{applicationId}` | M2 | 原子占用或释放、去重、防乱序 |

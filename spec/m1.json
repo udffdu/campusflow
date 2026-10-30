@@ -1,6 +1,6 @@
 {
   "module": "M1",
-  "updated_at": "2026-10-29",
+  "updated_at": "2026-10-30",
   "status": "review_draft",
   "workstreams": [
     {
@@ -104,8 +104,8 @@
     },
     {
       "owner": "D",
-      "subject": "M1业务权限与角色、全校/院系访问范围、插座属性、主数据变更竞态、配置管理、通知渠道、服务凭据和CSRF",
-      "status": "three_supplements_implemented_under_user_authorization; other_boundaries_pending",
+      "subject": "M1业务权限与角色、全校/院系访问范围、插座属性、主数据变更竞态、配置管理、站内信/邮件通知渠道、服务凭据和CSRF",
+      "status": "three_supplements_and_reminder_email_extension_implemented_under_user_authorization; owner_review_and_other_boundaries_pending",
       "proposal": "docs/process/m1-d-integration-review.md",
       "repository_inspection": {
         "checked_at": "2026-10-28",
@@ -123,7 +123,8 @@
         "午夜开放表示",
         "M1路由和CSRF",
         "配置归属",
-        "最终通知渠道"
+        "真实SMTP服务商接收、退信/限流和密钥运维验收",
+        "D负责人对V4邮箱字段及邮件端点评审"
       ]
     },
     {
@@ -154,7 +155,9 @@
     "reservation_submit_plan": "docs/architecture/m1-reservation-submit-plan.md",
     "m1_a_boundary": "docs/requirements/m1-a-boundary.md",
     "reservation_submit_validation": "docs/process/m1-reservation-submit-validation.md",
-    "reservation_demo_api": "contracts/m1-reservation-demo-api.md"
+    "reservation_demo_api": "contracts/m1-reservation-demo-api.md",
+    "reminder_api": "contracts/m1-reminder-api.md",
+    "reminder_validation": "docs/process/m1-reminder-validation.md"
   },
   "delivery": {
     "implemented": false,
@@ -163,7 +166,7 @@
     "remote_ci": "not_run",
     "core_rules": "implemented_and_locally_tested",
     "reservation_store": "implemented_and_locally_tested",
-    "migrations": "M1 V1 verified in temporary PostgreSQL only; not deployed",
+    "migrations": "M1 V1/V2/V3 and D V4 exercised only in local temporary PostgreSQL; not deployed",
     "human_verification": {
       "reported_by": "leafwhisper286",
       "reported_finished_at": "2026-10-28T13:24:09+08:00",
@@ -648,6 +651,21 @@
       "notes": "deferral does not claim complete occupancy checks or other-owner approval"
     }
   },
+  "reminder_stage": {
+    "requirements": ["CF-M1-008", "CF-M1-009"],
+    "status": "implementation_and_local_simulated_preview_complete; external_smtp_and_latest_full_isolation_pending",
+    "channels": ["durable_in_app", "configurable_smtp_email"],
+    "scheduling": "server_clock_start_minus_15_minutes_and_unchecked_start_plus_10_minutes",
+    "delivery_semantics": "unique_business_event_and_D_receive_deduplication; SMTP is at_least_once_attempt under uncertain acknowledgement",
+    "frontend": "three_second_polling_toast_after_historical_baseline; not_websocket",
+    "test_accelerator": "test_classpath_only triggerReminderPair for every new manual reservation; bypasses scheduling time only and is not timing acceptance",
+    "human_acceptance": "user_confirmed_simulated_page_effect; multi_reservation_fix_not_recorded_as_latest_full_isolation",
+    "real_provider_tested": false,
+    "d_owner_reviewed": false,
+    "remote_ci": "not_run",
+    "committed": true,
+    "record": "docs/process/m1-reminder-validation.md"
+  },
   "personal_runtime_stage": {
     "status": "implemented_and_locally_validated; human_script_and_specified_ui_accepted",
     "authorization": {
@@ -741,7 +759,8 @@
     "remaining": [
       "M2/M3 occupancy/source integration and real cross-module review",
       "D in-flight disable race and midnight contract",
-      "B lifecycle/notification tasks outside A",
+      "CF-M1-010 no-show/violation and CF-M1-011 operations",
+      "real SMTP provider acceptance and D V4 owner review",
       "whole-group CI/release/rollback coordination"
     ],
     "local_implementation_commits": {

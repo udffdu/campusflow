@@ -2,7 +2,7 @@
 
 实现版，待 M1/M2/M3 负责人评审。D 不判断预约空闲，不保存申请或工单状态。
 
-2026-10-28补充：用户授权直接新增M1预约权限、预约开放范围和座位插座标记，负责人说明见 [接入说明书](../docs/handoffs/m1-integration.md)。这三项不再要求先取得D本人评审；不表示其已同意，也不扩大到其他未决跨模块政策。
+2026-10-28补充：用户授权直接新增M1预约权限、预约开放范围和座位插座标记。2026-10-30 又授权 CF-M1-008/009 所需的用户邮箱、邮件任务及内部邮件端点。负责人说明见 [接入说明书](../docs/handoffs/m1-integration.md)。这些实现不表示D负责人本人已评审，也不扩大到其他未决跨模块政策。
 
 ## 共同约定
 
@@ -21,7 +21,7 @@
 | --- | --- |
 | GET `/health` | 数据库就绪，不需登录 |
 | POST `/auth/login` | `{username,password}` → Identity，需 CSRF；失败五次锁五分钟 |
-| GET `/auth/me` | Identity：`{id,username,displayName,departmentId,active,roles,permissions}` |
+| GET `/auth/me` | Identity：`{id,username,displayName,email,departmentId,active,roles,permissions}`；email 可为 null |
 | POST `/auth/logout` | 退出当前会话 |
 | POST `/auth/password` | `{currentPassword,newPassword}`，成功注销本人所有会话 |
 | GET `/departments` | 已登录可读 |
@@ -29,8 +29,8 @@
 | GET `/roles`、GET `/permissions` | 管理员查询角色和权限目录 |
 | POST `/roles`、PUT `/roles/{code}` | `{code,name,permissions:[]}`，管理员；内置角色受保护，自定义角色不能获得全局管理权限 |
 | GET `/users` | 管理员分页查询，不返回密码哈希 |
-| POST `/users` | `{username,displayName,departmentId,roles:[],password}`，管理员 |
-| PUT `/users/{id}` | `{displayName,departmentId,roles:[],active}`，管理员；禁止自降权/自停用，至少留一位有效管理员 |
+| POST `/users` | `{username,displayName,email?,departmentId,roles:[],password}`，管理员；email 规范化为小写且全局唯一 |
+| PUT `/users/{id}` | `{displayName,email?,departmentId,roles:[],active}`，管理员；禁止自降权/自停用，至少留一位有效管理员 |
 | GET `/resources?type=&parentId=&q=&page=&size=`、GET `/resources/{id}` | spaces.read，包含停用记录用于历史展示 |
 | POST `/resources` | ResourceCreate，spaces.write + 院系范围；校区/楼栋仅系统管理员 |
 | PUT `/resources/{id}` | `{name,capacity,features,openingHours,active,expectedVersion,bookingScope?}`，冲突 409 后刷新 |
@@ -67,6 +67,8 @@ ResourceCreate：`{type,parentId,code,name,departmentId,capacity,features:[],ope
 | GET `/resources?type=&parentId=&page=&size=`、GET `/resources/{id}` | 主数据，含基础有效性/版本，不含预约和维修事实 |
 | POST `/notifications` | NotificationEvent → Delivery，202；按 source+eventId+recipientId 去重，载荷不同 409 |
 | GET `/notifications/{id}` | 仅本服务来源的回执，其他来源 404 |
+| POST `/email-notifications` | NotificationEvent → Delivery，202；独立邮件任务，按 source+eventId+recipientId 去重，载荷不同 409 |
+| GET `/email-notifications/{id}` | 仅本服务来源的邮件回执，其他来源 404 |
 | POST `/audit` | AuditEvent → `{id}`；按 source+eventId 去重，载荷不同 409 |
 
 业务服务从浏览器转发的 HttpOnly CF_SESSION Cookie 提取 sessionToken，在服务端调用 authorization；不要求前端读取会话。业务服务不能信任用户自报 actorId。D 不可用时，受保护写入应拒绝。
@@ -86,7 +88,9 @@ NotificationEvent（虚构示例）：
 ```
 
 Delivery 包含 `id,source,eventId,recipientId,title,status,attempts,nextAttemptAt,lastError,createdAt`。
-状态 PENDING→DELIVERED；收件人停用则 RETRY，指数退避，五次后 DEAD，管理员可重试。数据库故障则批次回滚，任务留存，下轮恢复。站内信写入和 DELIVERED 同事务；SKIP LOCKED 支持多个工作进程。渠道为真实持久化站内信，本次不包含邮件/短信，也不保证用户已读。
+站内信状态为 PENDING→DELIVERED；收件人停用则 RETRY，指数退避，五次后 DEAD，管理员可重试。数据库故障则批次回滚，任务留存，下轮恢复。站内信写入和 DELIVERED 同事务；SKIP LOCKED 支持多个工作进程。它是真实持久化通道，但不保证用户已读。
+
+邮件任务独立保存于 V4 的 `email_notification_tasks`，状态为 PENDING/DELIVERING/RETRY/DELIVERED/DEAD。工作进程以租约认领；收件人停用、缺少邮箱、邮件通道关闭或 SMTP 失败均保留安全错误码并退避，最多五次尝试。`PLATFORM_MAIL_ENABLED` 默认为 false；正式启用时从环境变量读取 SMTP、发件人、STARTTLS/SSL 和超时配置。发送使用稳定任务 ID 生成稳定 `Message-ID`，但 SMTP 在不确定响应下只能提供至少一次尝试语义，不能承诺严格 exactly-once。当前真实外部服务商尚未验收。
 
 AuditEvent：`{eventId,actorId,departmentId,action,objectType,objectId,outcome,reasonCode?,occurredAt}`。
 action 为大写字母数字、点和下划线；outcome=SUCCESS/FAILURE；reasonCode 只能为大写枚举式理由码；未知字段拒绝。事件时间不得晚于当前一分钟。

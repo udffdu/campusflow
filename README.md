@@ -2,7 +2,7 @@
 
 以自习座位预约为核心，连接整教室申请审批与物业报修的课程实践项目。
 
-当前阶段：D 公共层与前端公共外壳已实现；M1-A 个人预约及 M1-B 的 CF-M1-007 每日教室码、本人签到、使用计时与主动退座已实现，当前页面流程已由用户确认。最新使用状态/退座调整尚未重新运行自动化检查；提醒、未签到违约、自动结束、运营查询、M2/M3 业务及跨模块契约仍未完成；尚未部署华为云。
+当前阶段：D 公共层与前端公共外壳已实现；M1-A 个人预约及 M1-B 的 CF-M1-007 每日教室码、本人签到、使用计时与主动退座已实现。CF-M1-008/009 的预约前 15 分钟提醒、开始后 10 分钟未签到提醒、持久化站内信、邮件任务和页面弹窗已完成代码及本地模拟验证工具，真实 SMTP 服务商验收和 D 负责人评审仍待完成。未签到取消/违约、自动结束、运营查询、M2/M3 业务及完整跨模块联调仍未完成；尚未部署华为云。
 
 ## 已确认的上下文
 
@@ -40,8 +40,11 @@ scripts/                  仓库检查及未来运维脚本
 运行当前阶段的仓库结构和需求登记检查：
 
 ```sh
-python3 scripts/check_repository.py
+source scripts/resolve-python.sh
+"$PYTHON" scripts/check_repository.py
 ```
+
+Shell 脚本会自动选择可用的 Python 3.11+：Linux/macOS 通常为`python3`，Windows Git Bash 通常为`python`。需要手动指定时设置`CF_PYTHON_EXECUTABLE`为解释器路径。
 
 该脚本只检查仓库登记。应用验证请执行：
 
@@ -84,13 +87,28 @@ M1已有独立只读HTTP与座位查询页，尚不开放预约提交。Java21/N
 
 ## M1-B CF-M1-007 每日教室码与签到
 
-学生在`/my-reservations`的“已预约”记录中输入 6 位当日教室码签到。按 2026-10-30 用户最新决定，当前体验阶段不限制签到时间；服务端只允许本人把`CONFIRMED`原子更新为`CHECKED_IN`。正确码会进入`/seat-usage/:reservationId`使用状态页，由服务端签到时刻驱动计时；学生二次确认退座后原子更新为`COMPLETED`并停止计时。错误码清空后可重新输入，数据库错误次数限制仍保留。空间管理员从“空间资源”的启用教室详情打开`/room-checkin-display/:roomId`，可查看按上海日期轮换的教室码和倒计时。CF-M1-008～011仍未实现。
+学生在`/my-reservations`的“已预约”记录中输入 6 位当日教室码签到。按 2026-10-30 用户最新决定，当前体验阶段不限制签到时间；服务端只允许本人把`CONFIRMED`原子更新为`CHECKED_IN`。正确码会进入`/seat-usage/:reservationId`使用状态页，由服务端签到时刻驱动计时；学生二次确认退座后原子更新为`COMPLETED`并停止计时。错误码清空后可重新输入，数据库错误次数限制仍保留。空间管理员从“空间资源”的启用教室详情打开`/room-checkin-display/:roomId`，可查看按上海日期轮换的教室码和倒计时。CF-M1-010/011仍未实现。
 
 普通入口额外要求独立的`M1_CHECKIN_SECRET`。复验继续使用`bash scripts/check-m1-personal.sh`；人工页面验收使用`bash scripts/start-m1-personal-preview.sh`。详见[签到/使用状态API契约](contracts/m1-check-in-api.md)和[验证记录](docs/process/m1-check-in-validation.md)。历史自动化结果不代表最新调整、远程CI、提交或部署已经通过。
 
 签到人工预览必须使用`start-m1-personal-preview.sh`及其`http://[::1]:5374`地址；`run-local-demo.sh`只启动D公共层，单独配合5173前端不会启动M1。预览会创建`student`与`manager`，并为`student`准备一条A101预约，便于完成“管理员取码—学生签到—计时—退座”检查。
 
 **不同身份必须使用不同浏览器环境。** `manager`与`student`不能只在同一浏览器配置下打开两个标签页，因为同源标签页共享`CF_SESSION` Cookie，后登录的账号会替换前一个账号。需要同时查看两个身份时，请使用两个不同浏览器（例如 Edge 与 Chrome），或一个普通窗口和一个 InPrivate/无痕窗口；也可以在同一窗口退出`manager`后再登录`student`顺序验收。
+
+## M1-B CF-M1-008 / 009 预约提醒
+
+M1 后台按服务端时钟生成两类唯一业务事件：预约开始前 15 分钟提醒，以及开始后 10 分钟仍为`CONFIRMED`的未签到提醒。每条消息包含教室、座位、上海时区完整时间和操作提示。D 分别持久化站内信与邮件任务；前端每 3 秒轮询新站内信并显示约 10 秒的临时弹窗，首次加载不会把历史消息全部弹出。弹窗不是 WebSocket，最终记录和已读状态以`/notifications`为准。
+
+本地自动化与人工预览：
+
+```sh
+bash scripts/check-m1-reminders.sh
+bash scripts/start-m1-reminder-preview.sh
+# 人工新建每一笔预约后，立即生成两类测试提醒：
+bash scripts/start-m1-instant-reminder-preview.sh
+```
+
+默认使用本地模拟 SMTP，邮箱页面为`http://127.0.0.1:8025`。即时脚本只通过测试 classpath 绕过调度等待，不改预约时间、不进入生产 jar，不能替代正式 15/10 分钟条件的验收。真实邮箱使用`bash scripts/start-m1-reminder-preview.sh --real-mail`，并通过环境变量提供`CF_REMINDER_EMAIL`、`PLATFORM_MAIL_ENABLED=true`、`PLATFORM_SMTP_HOST`、`PLATFORM_SMTP_PORT`、`PLATFORM_MAIL_FROM`及服务商要求的认证参数；不得把真实授权码写进仓库。完整语义见[提醒契约](contracts/m1-reminder-api.md)与[提醒验证记录](docs/process/m1-reminder-validation.md)。
 
 ## 关键文档
 
@@ -101,6 +119,7 @@ M1已有独立只读HTTP与座位查询页，尚不开放预约提交。Java21/N
 - [M1 需求评审稿](docs/requirements/m1.md) · [并发方案 B](docs/architecture/adr-0003-m1-concurrency.md) · [评审包](docs/process/m1-review.md)
 - [M1 核心规则与验证](docs/process/m1-core-validation.md) · [M1-B 接入说明书](docs/handoffs/m1-b.md)（随 A 实现更新，A 完成后交接）
 - [CF-M1-007 签到契约](contracts/m1-check-in-api.md) · [签到验证记录](docs/process/m1-check-in-validation.md)
+- [CF-M1-008/009 提醒契约](contracts/m1-reminder-api.md) · [提醒验证记录](docs/process/m1-reminder-validation.md)
 - [M1 内部座位查询方案](docs/architecture/m1-availability-plan.md) · [80测试与查询复验](docs/process/m1-availability-validation.md)（完整D/M2/M3集成仍待进行）
 - [D三项补充实际验证](docs/process/m1-d-supplement-validation.md) · [D/M1-B/M2/M3负责人说明书](docs/handoffs/m1-integration.md)（M1 86及前端11已有用户复验，D24由同次本地报告补证；未部署）
 - [D 实现范围](docs/requirements/d.md) · [D 接口契约](contracts/platform-api.md)
