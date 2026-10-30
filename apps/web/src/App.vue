@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, message } from './api'
-import { can, refreshUnread, session } from './session'
+import { announceSessionChange, can, refreshUnread, session } from './session'
 import { roleNames } from './types'
 import Icon from './components/Icon.vue'
 import {m1Get} from './m1Api'
@@ -24,8 +24,8 @@ const navigation = computed(() => [
   {path:'/audit',name:'操作审计',icon:'audit',show:can('audit.read')},
 ].filter(item => item.show))
 const date = new Intl.DateTimeFormat('zh-CN',{month:'long',day:'numeric',weekday:'long'}).format(new Date())
-async function logout() { busy.value=true; error.value=''; try { await api('/auth/logout','POST'); clearPendingReservations(); session.user=null; session.unread=0; await router.replace('/login') } catch(e) {error.value=message(e)} finally {busy.value=false} }
-async function changePassword() { busy.value=true;error.value=''; try { await api('/auth/password','POST',{currentPassword:currentPassword.value,newPassword:newPassword.value}); clearPendingReservations();passwordOpen.value=false;currentPassword.value='';newPassword.value='';session.user=null;await router.replace('/login?changed=1') } catch(e) {error.value=message(e)} finally {busy.value=false} }
+async function logout() { busy.value=true; error.value=''; try { await api('/auth/logout','POST'); announceSessionChange();clearPendingReservations(); session.user=null; session.unread=0; await router.replace('/login') } catch(e) {error.value=message(e)} finally {busy.value=false} }
+async function changePassword() { busy.value=true;error.value=''; try { await api('/auth/password','POST',{currentPassword:currentPassword.value,newPassword:newPassword.value}); announceSessionChange();clearPendingReservations();passwordOpen.value=false;currentPassword.value='';newPassword.value='';session.user=null;await router.replace('/login?changed=1') } catch(e) {error.value=message(e)} finally {busy.value=false} }
 let poll: ReturnType<typeof setInterval>
 onMounted(() => { poll=setInterval(() => { if(session.user) void refreshUnread().catch(()=>{}) },30000) })
 onUnmounted(() => clearInterval(poll))

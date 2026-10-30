@@ -1,15 +1,17 @@
 import {flushPromises,mount,type VueWrapper} from '@vue/test-utils'
 import {afterEach,beforeEach,expect,it,vi} from 'vitest'
+import {ApiError} from '../api'
 import MyReservationsView from '../views/MyReservationsView.vue'
 import {session} from '../session'
 import {savePending} from '../reservations'
-const {get,push}=vi.hoisted(()=>({get:vi.fn(),push:vi.fn()}))
+const {get,push,checkIn}=vi.hoisted(()=>({get:vi.fn(),push:vi.fn(),checkIn:vi.fn()}))
 vi.mock('../m1Api',()=>({m1Get:get}))
 vi.mock('vue-router',()=>({useRouter:()=>({push})}))
+vi.mock('../reservations',async()=>({...await vi.importActual<typeof import('../reservations')>('../reservations'),checkInReservation:checkIn}))
 let wrapper:VueWrapper|undefined
 const record={id:'booking-1',roomId:'r',seatId:'s',startAt:'2026-10-29T01:00:00Z',endAt:'2026-10-29T02:00:00Z',status:'CONFIRMED',version:1,resourceVersion:1,stage:'PERSONAL_DEMO',productionReady:false}
 const caps={canReadOwn:true,canCreateDemoReservation:true,productionReady:false,stage:'PERSONAL_DEMO'}
-beforeEach(()=>{sessionStorage.clear();get.mockReset();push.mockReset();session.user={id:'u',username:'student',displayName:'同学',departmentId:'d',active:true,roles:['SEAT_USER'],permissions:['seats.reservations.read.own','seats.availability.read','seats.reservations.create']};get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?caps:{items:[record],size:20,nextCursor:''})})
+beforeEach(()=>{sessionStorage.clear();get.mockReset();push.mockReset();checkIn.mockReset();session.user={id:'u',username:'student',displayName:'同学',departmentId:'d',active:true,roles:['SEAT_USER'],permissions:['seats.reservations.read.own','seats.availability.read','seats.reservations.create']};get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?caps:{items:[record],size:20,nextCursor:''})})
 afterEach(()=>{wrapper?.unmount();wrapper=undefined})
 async function open(){wrapper=mount(MyReservationsView,{global:{stubs:{RouterLink:true}}});await flushPromises()}
 it('reads own records without passing a user identity and opens repeat using only the reservation ID',async()=>{
@@ -41,4 +43,14 @@ it('discards a late history response after the signed-in user changes',async()=>
 it('ordinary capability routes repeat to the normal personal page and accepts ordinary records',async()=>{
   get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?{...caps,canCreateDemoReservation:false,canCreateReservation:true,stage:'PERSONAL'}:{items:[{...record,stage:'PERSONAL'}],size:20,nextCursor:''})
   await open();await wrapper!.findAll('button').find(b=>b.text()==='再次预约')!.trigger('click');expect(push).toHaveBeenCalledWith({path:'/seat-reservations',query:{repeatReservationId:'booking-1'}})
+})
+it('submits a six digit code and updates only the returned reservation state',async()=>{
+  checkIn.mockResolvedValue({...record,status:'CHECKED_IN',version:2,stage:'PERSONAL'});await open()
+  await wrapper!.get('input[autocomplete="one-time-code"]').setValue('012345');await wrapper!.findAll('button').find(b=>b.text()==='签到')!.trigger('submit');await flushPromises()
+  expect(checkIn).toHaveBeenCalledWith('booking-1','012345');expect(push).toHaveBeenCalledWith('/seat-usage/booking-1');expect(wrapper!.text()).toContain('进入使用状态');expect(wrapper!.find('input[autocomplete="one-time-code"]').exists()).toBe(false)
+})
+it('clears an incorrect code and keeps the form available for another attempt',async()=>{
+  checkIn.mockRejectedValue(new ApiError(422,'CHECK_IN_CODE_INVALID','invalid'));await open();const input=wrapper!.get('input[autocomplete="one-time-code"]')
+  await input.setValue('654321');await wrapper!.findAll('button').find(b=>b.text()==='签到')!.trigger('submit');await flushPromises()
+  expect(wrapper!.text()).toContain('签到码错误，请重新输入');expect((wrapper!.get('input[autocomplete="one-time-code"]').element as HTMLInputElement).value).toBe('');expect(push).not.toHaveBeenCalled()
 })

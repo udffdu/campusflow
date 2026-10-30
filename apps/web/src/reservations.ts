@@ -6,7 +6,9 @@ export interface ReservationHistory {items:OwnReservation[];size:number;nextCurs
 export interface ReservationIntent {roomId:string;seatId:string;startAt:string;endAt:string}
 export interface PendingReservation {userId:string;key:string;intent:ReservationIntent;seatCode:string;roomCode:string}
 export interface OwnReservation extends ReservationIntent {id:string;status:string;version:number;resourceVersion:number;stage:'PERSONAL_DEMO'|'PERSONAL';productionReady:false;replayed?:boolean}
+export interface UsageSession extends OwnReservation {checkedInAt:string;completedAt:string|null;serverTime:string;idempotent?:boolean}
 export interface Capabilities {stage:string;canCreateDemoReservation:boolean;canCreateReservation?:boolean;uncheckedSources?:string[];advanceMode?:string;advanceDays?:number;durationHours?:number;canReadOwn:boolean;productionReady:false}
+export interface RoomCheckInCode {roomId:string;roomCode:string;roomName:string;code:string;validDate:string;expiresAt:string;timeZone:'Asia/Shanghai'}
 const prefix='campusflow.pending-reservation.'
 export function clearPendingReservations(){for(let i=sessionStorage.length-1;i>=0;i--){const key=sessionStorage.key(i);if(key?.startsWith(prefix))sessionStorage.removeItem(key)}}
 export function pendingFor(userId:string):PendingReservation|undefined {
@@ -23,5 +25,37 @@ export async function submitReservation(p:PendingReservation):Promise<OwnReserva
   catch{throw new ApiError(0,'RESULT_UNKNOWN','尚未确认提交结果，请保留原请求并查询结果或重试')}
   if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status===401)window.dispatchEvent(new Event('session-expired'));throw new ApiError(response.status,error.code??'RESULT_UNKNOWN',error.message??'尚未确认提交结果，请保留原请求重试',error.requestId)}
   try{const value=await response.json();if(!validOwnReservation(value))throw new Error('incomplete response');return value}catch{throw new ApiError(0,'RESULT_UNKNOWN','响应未完整收到，请使用原请求恢复结果')}
+}
+export async function checkInReservation(id:string,code:string):Promise<OwnReservation>{
+  if(!/^[0-9]{6}$/.test(code))throw new ApiError(0,'CHECK_IN_CODE_INVALID','请输入 6 位数字签到码')
+  const csrf=await m1Get<{token:string;headerName:string}>('/csrf')
+  let response:Response
+  try{response=await fetch(`/api/m1/v1/reservations/${encodeURIComponent(id)}/check-in`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-M1-CSRF-Token':csrf.token},body:JSON.stringify({code})})}
+  catch{throw new ApiError(0,'NETWORK','签到服务连接失败，请保留签到码并重试')}
+  if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status===401)window.dispatchEvent(new Event('session-expired'));throw new ApiError(response.status,error.code??'CHECK_IN_FAILED',error.message??'签到失败，请稍后重试',error.requestId)}
+  const value=await response.json().catch(()=>null)
+  if(!validOwnReservation(value))throw new ApiError(0,'RESULT_UNKNOWN','签到结果未完整收到，请刷新预约记录确认')
+  return value
+}
+export async function usageSession(id:string):Promise<UsageSession>{
+  const value=await m1Get<UsageSession>(`/reservations/${encodeURIComponent(id)}/usage`)
+  if(!validUsageSession(value))throw new ApiError(0,'RESULT_UNKNOWN','使用状态响应不完整，请刷新后重试')
+  return value
+}
+export async function leaveSeat(id:string):Promise<UsageSession>{
+  const csrf=await m1Get<{token:string;headerName:string}>('/csrf')
+  let response:Response
+  try{response=await fetch(`/api/m1/v1/reservations/${encodeURIComponent(id)}/leave-seat`,{method:'POST',credentials:'same-origin',headers:{'X-M1-CSRF-Token':csrf.token}})}
+  catch{throw new ApiError(0,'NETWORK','退座服务连接失败，请刷新使用状态确认后重试')}
+  if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status===401)window.dispatchEvent(new Event('session-expired'));throw new ApiError(response.status,error.code??'LEAVE_SEAT_FAILED',error.message??'退座失败，请稍后重试',error.requestId)}
+  const value=await response.json().catch(()=>null)
+  if(!validUsageSession(value))throw new ApiError(0,'RESULT_UNKNOWN','退座结果尚未完整收到，请刷新使用状态确认')
+  return value
+}
+function validUsageSession(value:unknown):value is UsageSession{
+  const v=value as UsageSession
+  return validOwnReservation(v)&&['CHECKED_IN','COMPLETED'].includes(v.status)
+    &&Number.isFinite(Date.parse(v.checkedInAt))&&Number.isFinite(Date.parse(v.serverTime))
+    &&(v.completedAt===null||Number.isFinite(Date.parse(v.completedAt)))
 }
 export function definitiveFailure(e:unknown){return e instanceof ApiError&&['USER_TIME_CONFLICT','SEAT_TIME_CONFLICT','RESOURCE_INACTIVE','OUTSIDE_OPENING_HOURS','IN_PAST','ADVANCE_WINDOW','DURATION_LIMIT','NOT_WHOLE_HOUR','INVALID_INTERVAL'].includes(e.code)}

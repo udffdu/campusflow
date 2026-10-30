@@ -23,7 +23,7 @@ beforeEach(()=>{
 })
 afterEach(()=>{wrapper?.unmount();wrapper=undefined})
 async function edit(){
-  wrapper=mount(ResourcesView);await flushPromises()
+  wrapper=mount(ResourcesView,{global:{stubs:{RouterLink:true}}});await flushPromises()
   await wrapper.findAll('button').find(b=>b.text()==='编辑')!.trigger('click');await flushPromises()
 }
 
@@ -60,7 +60,7 @@ it('adds and removes the seat outlet marker without changing unrelated free-text
 it('shows a readable outlet label to members and keeps editing controls restricted',async()=>{
   resource={...resource,type:'SEAT',bookingScope:null,features:['POWER_OUTLET']}
   session.user!.roles=['MEMBER'];session.user!.permissions=['spaces.read']
-  wrapper=mount(ResourcesView);await flushPromises()
+  wrapper=mount(ResourcesView,{global:{stubs:{RouterLink:true}}});await flushPromises()
   expect(wrapper.findAll('button').some(b=>b.text()==='编辑'||b.text().includes('新增空间'))).toBe(false)
   await wrapper.findAll('button').find(b=>b.text()==='详情')!.trigger('click');await flushPromises()
   expect(wrapper.text()).toContain('有插座');expect(wrapper.text()).not.toContain('POWER_OUTLET')
