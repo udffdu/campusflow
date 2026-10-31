@@ -66,6 +66,14 @@ public final class DatabaseFixture {
                                     UUID.fromString(command.path("seatIds").get(2).asText()),UUID.fromString(command.path("seatIds").get(3).asText())),
                             UUID.fromString(command.path("outsideRoomId").asText()),UUID.fromString(command.path("outsideSeatId").asText()));
                 }
+                else if(op.equals("seedFullPreview")){
+                    var command=json.readTree(line);var jdbc=new JdbcTemplate(pg.getPostgresDatabase());
+                    value=seedFullPreview(jdbc,UUID.fromString(command.path("userId").asText()),
+                            UUID.fromString(command.path("roomId").asText()),
+                            List.of(UUID.fromString(command.path("seatIds").get(0).asText()),UUID.fromString(command.path("seatIds").get(1).asText()),
+                                    UUID.fromString(command.path("seatIds").get(2).asText()),UUID.fromString(command.path("seatIds").get(3).asText())),
+                            UUID.fromString(command.path("outsideRoomId").asText()),UUID.fromString(command.path("outsideSeatId").asText()));
+                }
                 else if(op.equals("snapshot")){
                     var jdbc=new JdbcTemplate(pg.getPostgresDatabase());var snapshot=new TreeMap<String,Object>();
                     for(String table:List.of("reservations","reservation_requests","outbox_events","reservation_transitions","reservation_violations","checkin_rate_limits"))snapshot.put(table,jdbc.queryForObject("select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb)::text from m1."+table+" t",String.class));
@@ -89,6 +97,39 @@ public final class DatabaseFixture {
         operation(jdbc,outsideRoom,outsideSeat,anchor.minus(java.time.Duration.ofDays(3)),java.time.Duration.ofHours(1),"COMPLETED",
                 java.time.Duration.ZERO,java.time.Duration.ofMinutes(30));
         return Map.of("from",from.toString(),"to",to.toString(),"expectedScopedTotal",5,"expectedCheckedIn",2,"expectedViolations",1);
+    }
+
+    private static Map<String,Object> seedFullPreview(JdbcTemplate jdbc,UUID user,UUID room,List<UUID> seats,UUID outsideRoom,UUID outsideSeat){
+        java.time.Instant now=java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        UUID active=previewOperation(jdbc,user,room,seats.get(0),now.plus(java.time.Duration.ofMinutes(10)),java.time.Duration.ofHours(1),"CONFIRMED",null,null,1);
+        UUID early=previewOperation(jdbc,user,room,seats.get(1),now.plus(java.time.Duration.ofMinutes(100)),java.time.Duration.ofHours(1),"CONFIRMED",null,null,2);
+        previewOperation(jdbc,user,room,seats.get(2),now.minus(java.time.Duration.ofDays(1)),java.time.Duration.ofHours(1),"COMPLETED",java.time.Duration.ofMinutes(4),java.time.Duration.ofMinutes(49),3);
+        UUID noShow=previewOperation(jdbc,user,room,seats.get(3),now.minus(java.time.Duration.ofDays(2)),java.time.Duration.ofHours(1),"NO_SHOW",null,null,4);
+        previewOperation(jdbc,user,room,seats.get(0),now.minus(java.time.Duration.ofDays(3)),java.time.Duration.ofHours(1),"DISRUPTED",null,null,5);
+        operation(jdbc,outsideRoom,outsideSeat,now.minus(java.time.Duration.ofDays(1)),java.time.Duration.ofHours(1),"COMPLETED",java.time.Duration.ofMinutes(2),java.time.Duration.ofMinutes(30));
+        jdbc.update("""
+                insert into m1.reservation_violations
+                (violation_id,reservation_id,user_id,room_id,seat_id,start_at,end_at,reason,recorded_at,reservation_version)
+                select ?,id,user_id,room_id,seat_id,start_at,end_at,'NO_SHOW',start_at+interval '15 minutes',2 from m1.reservations where id=?
+                """,UUID.randomUUID(),noShow);
+        return Map.of("activeReservationId",active,"earlyReservationId",early,
+                "from",now.minus(java.time.Duration.ofDays(4)).toString(),"to",now.plus(java.time.Duration.ofDays(1)).toString(),
+                "expectedScopedTotal",5,"expectedViolations",1);
+    }
+
+    private static UUID previewOperation(JdbcTemplate jdbc,UUID user,UUID room,UUID seat,java.time.Instant start,java.time.Duration length,String status,
+                                         java.time.Duration checkOffset,java.time.Duration completeOffset,int order){
+        UUID id=UUID.randomUUID();int version=completeOffset!=null?3:status.equals("CONFIRMED")?1:2;java.time.Instant created=java.time.Instant.now().minusSeconds(order*60L);
+        jdbc.update("""
+                insert into m1.reservations(id,user_id,room_id,seat_id,start_at,end_at,status,source,resource_version,version,created_at,updated_at)
+                values(?,?,?,?,?,?,?,'M1',1,?,?,?)
+                """,id,user,room,seat,java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plus(length)),status,version,
+                java.sql.Timestamp.from(created),java.sql.Timestamp.from(java.time.Instant.now()));
+        if(checkOffset!=null)transition(jdbc,id,1,"CONFIRMED","CHECKED_IN",start.plus(checkOffset));
+        if(completeOffset!=null)transition(jdbc,id,2,"CHECKED_IN","COMPLETED",start.plus(completeOffset));
+        if(status.equals("NO_SHOW"))transition(jdbc,id,1,"CONFIRMED","NO_SHOW",start.plus(java.time.Duration.ofMinutes(15)));
+        if(status.equals("DISRUPTED"))transition(jdbc,id,1,"CONFIRMED","DISRUPTED",start.plus(java.time.Duration.ofMinutes(20)));
+        return id;
     }
 
     private static void operation(JdbcTemplate jdbc,UUID room,UUID seat,java.time.Instant start,java.time.Duration length,String status,

@@ -78,6 +78,7 @@ def main():
             preview_csrf=student.request('/api/m1/v1/csrf',base=m_base)[1]['token']
             preview_reservation=student.request('/api/m1/v1/reservations','POST',preview_body,201,base=m_base,
                 headers={'Origin':origin,'Idempotency-Key':'preview-ready-check-in','X-M1-CSRF-Token':preview_csrf})[1]
+            database.command({'op':'openCheckIn','reservationId':preview_reservation['id']})
             web_env={k:v for k,v in env.items() if not k.startswith(('M1_','BOOTSTRAP_'))};web_env.update(D_PROXY_TARGET=d_base,M1_PROXY_TARGET=m_base)
             web=Process(['npm','run','dev','--','--host','::1','--port',str(args.web_port),'--strictPort'],web_env,logs/'web.log',ROOT/'apps/web',fixture=False);stack.callback(web.close)
             opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -87,7 +88,7 @@ def main():
                     if web.process.poll() is not None:raise RuntimeError('个人预约前端启动失败')
                     time.sleep(.1)
             else:raise RuntimeError('个人预约前端启动超时')
-            print(f'普通M1个人预约/签到预览：{origin}/my-reservations\n学生账号student、空间管理员账号manager，密码均为终端设置值。\n已为student准备一条A101预约；须在预约开始后15分钟内签到，正确签到后进入计时与退座页面。\nmanager可在空间资源的A101详情打开签到码显示页。M1以生产jar运行，数据库为独立临时数据；整室申请/维修限制尚未接入。\n使用[::1]隔离旧演示Cookie；保留终端，Ctrl+C只清理本次预览。',flush=True)
+            print(f'普通M1个人预约/签到预览：{origin}/my-reservations\n学生账号student、空间管理员账号manager，密码均为终端设置值。\n已为student准备一条A101预约；可在预约开始前20分钟至开始后15分钟签到，正确签到后进入计时与退座页面。\nmanager可在空间资源的A101详情打开签到码显示页。M1以生产jar运行，数据库为独立临时数据；整室申请/维修限制尚未接入。\n使用[::1]隔离旧演示Cookie；保留终端，Ctrl+C只清理本次预览。',flush=True)
             while all(p.process.poll() is None for p in (personal,d,web,database)):time.sleep(1)
             raise RuntimeError('预览服务意外退出')
         closed_port=free_port();closed_env=dict(env,M1_WRITE_ENABLED='false',M1_PERSONAL_DEMO='true')
@@ -108,8 +109,11 @@ def main():
         display=admin.request('/api/m1/v1/rooms/'+data['room']['id']+'/check-in-code',base=m_base)[1]
         check('authorized room display returns a six digit Shanghai daily code',lambda:equal((display['roomId'],len(display['code']),display['timeZone']),(data['room']['id'],6,'Asia/Shanghai')))
         checkin_token=own('csrf')['token']
+        early=student.request('/api/m1/v1/reservations/'+saved['id']+'/check-in','POST',{'code':display['code']},status=409,base=m_base,headers={'Origin':origin,'X-M1-CSRF-Token':checkin_token})[1]
+        check('ordinary jar rejects check-in before the twenty minute window',lambda:equal(early['code'],'CHECK_IN_TOO_EARLY'))
+        database.command({'op':'openCheckIn','reservationId':saved['id']})
         checked=student.request('/api/m1/v1/reservations/'+saved['id']+'/check-in','POST',{'code':display['code']},base=m_base,headers={'Origin':origin,'X-M1-CSRF-Token':checkin_token})[1]
-        check('ordinary jar checks in the authenticated owner without a time window',lambda:equal((checked['status'],checked['version'],checked['idempotent']),('CHECKED_IN',2,False)))
+        check('ordinary jar checks in the authenticated owner inside the time window',lambda:equal((checked['status'],checked['version'],checked['idempotent']),('CHECKED_IN',2,False)))
         replayed_checkin=student.request('/api/m1/v1/reservations/'+saved['id']+'/check-in','POST',{'code':'invalid'},base=m_base,headers={'Origin':origin,'X-M1-CSRF-Token':checkin_token})[1]
         check('repeated owner check-in is idempotent without another transition',lambda:equal((replayed_checkin['status'],replayed_checkin['version'],replayed_checkin['idempotent']),('CHECKED_IN',2,True)))
         after=(tomorrow+timedelta(days=1)).replace(hour=0);bad=dict(body,startAt=after.astimezone(timezone.utc).isoformat().replace('+00:00','Z'),endAt=(after+timedelta(hours=1)).astimezone(timezone.utc).isoformat().replace('+00:00','Z'))

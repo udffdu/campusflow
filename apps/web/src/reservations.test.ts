@@ -1,8 +1,13 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest'
 import {ApiError} from './api'
-import {checkInReservation,clearPendingReservations,leaveSeat,pendingFor,savePending,submitReservation,usageSession,type PendingReservation} from './reservations'
+import {checkInReservation,clearPendingReservations,leaveSeat,pendingFor,savePending,shanghaiDateRange,submitReservation,usageSession,type PendingReservation} from './reservations'
 const p:PendingReservation={userId:'u',key:'request-key',intent:{roomId:'r',seatId:'s',startAt:'2026-10-29T01:00:00Z',endAt:'2026-10-29T02:00:00Z'},seatCode:'S1',roomCode:'A101'}
 beforeEach(()=>sessionStorage.clear());afterEach(()=>vi.unstubAllGlobals())
+it('converts inclusive Shanghai calendar dates to one half-open UTC range',()=>{
+  expect(shanghaiDateRange('2026-10-30','2026-10-31')).toEqual({from:'2026-10-29T16:00:00.000Z',to:'2026-10-31T16:00:00.000Z'})
+  expect(()=>shanghaiDateRange('2026-10-31','2026-10-30')).toThrow('结束日期不能早于开始日期')
+  expect(()=>shanghaiDateRange('2026-02-30','2026-03-01')).toThrow('请选择有效日期')
+})
 it('sends separate M1 CSRF and idempotency headers without identity or D credentials',async()=>{
   const fetch=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({token:'test-token',headerName:'X-M1-CSRF-Token'}))).mockResolvedValueOnce(new Response(JSON.stringify({id:'booking',...p.intent,status:'CONFIRMED',version:1,resourceVersion:1,stage:'PERSONAL_DEMO',productionReady:false}),{status:201}));vi.stubGlobal('fetch',fetch)
   await submitReservation(p);expect(fetch.mock.calls[1]).toEqual(['/api/m1/v1/reservations',expect.objectContaining({headers:{'Content-Type':'application/json','X-M1-CSRF-Token':'test-token','Idempotency-Key':'request-key'},body:JSON.stringify(p.intent)})])

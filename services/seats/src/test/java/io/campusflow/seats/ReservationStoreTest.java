@@ -183,6 +183,14 @@ class ReservationStoreTest {
         assertEquals(3606,completedEntry.usageDurationSeconds());assertNull(completedEntry.violationReason());
         var violation=history.items().stream().filter(item->item.reservation().id().equals(noShow.id())).findFirst().orElseThrow();
         assertEquals("NO_SHOW",violation.violationReason());assertEquals(0,violation.usageDurationSeconds());
+
+        var filtered=store.detailedHistoryForUser(user,new ReservationStore.HistoryFilter(
+                ReservationStatus.NO_SHOW,at("10:30:00"),at("11:30:00")),null,20);
+        assertEquals(List.of(noShow.id()),filtered.items().stream().map(item->item.reservation().id()).toList());
+        assertTrue(store.detailedHistoryForUser(user,new ReservationStore.HistoryFilter(
+                ReservationStatus.COMPLETED,at("10:30:00"),at("11:30:00")),null,20).items().isEmpty());
+        assertThrows(IllegalArgumentException.class,()->new ReservationStore.HistoryFilter(null,at("10:00:00"),null));
+        assertThrows(IllegalArgumentException.class,()->new ReservationStore.HistoryFilter(null,at("11:00:00"),at("10:00:00")));
     }
 
     @Test void overlappingSeatIsRejected() {

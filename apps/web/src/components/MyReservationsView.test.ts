@@ -29,6 +29,18 @@ it('uses the server cursor for next page and returns to the first page on refres
   await wrapper!.findAll('button').find(b=>b.text()==='下一页')!.trigger('click');await flushPromises();expect(get).toHaveBeenCalledWith('/reservations?size=20&cursor=next-token');expect(wrapper!.text()).toContain('第 2 页')
   await wrapper!.findAll('button').find(b=>b.text()==='刷新列表')!.trigger('click');await flushPromises();expect(wrapper!.text()).toContain('第 1 页');expect(get.mock.calls.at(-1)?.[0]).toBe('/reservations?size=20')
 })
+it('applies owner-scoped status and inclusive Shanghai date filters on the server',async()=>{
+  get.mockImplementation(async(path:string)=>path==='/reservation-capabilities'?caps:path.includes('status=NO_SHOW')?history([]):history())
+  await open();await wrapper!.get('select').setValue('NO_SHOW');const dates=wrapper!.findAll('input[type="date"]');await dates[0]!.setValue('2026-10-30');await dates[1]!.setValue('2026-10-31')
+  await wrapper!.get('form.history-filters').trigger('submit');await flushPromises()
+  expect(get).toHaveBeenCalledWith('/reservations?size=20&status=NO_SHOW&from=2026-10-29T16%3A00%3A00.000Z&to=2026-10-31T16%3A00%3A00.000Z')
+  expect(wrapper!.text()).toContain('当前筛选条件下没有预约记录')
+  await wrapper!.findAll('button').find(b=>b.text()==='清除')!.trigger('click');await flushPromises();expect(get.mock.calls.at(-1)?.[0]).toBe('/reservations?size=20')
+})
+it('rejects an incomplete date filter before sending another history request',async()=>{
+  await open();await wrapper!.findAll('input[type="date"]')[0]!.setValue('2026-10-30');const calls=get.mock.calls.length
+  await wrapper!.get('form.history-filters').trigger('submit');await flushPromises();expect(wrapper!.text()).toContain('请选择完整的开始和结束日期');expect(get).toHaveBeenCalledTimes(calls)
+})
 it('keeps history available when create or query rights are absent',async()=>{
   session.user!.permissions=['seats.reservations.read.own'];get.mockResolvedValueOnce({...caps,canCreateDemoReservation:false}).mockResolvedValueOnce(history());await open();expect(wrapper!.text()).toContain('booking-1');expect(wrapper!.findAll('button').some(b=>b.text()==='再次预约')).toBe(false)
 })

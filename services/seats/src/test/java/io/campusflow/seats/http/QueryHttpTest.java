@@ -275,6 +275,19 @@ class QueryHttpTest {
         var replay=personalPost(token,"https://campus.example");assertEquals(200,replay.statusCode());assertEquals(body(first).path("id"),body(replay).path("id"));
         var history=body(personalGet("/api/m1/v1/reservations"));assertEquals(1,history.path("items").size());assertEquals("PERSONAL",history.path("items").get(0).path("stage").asText());counts(1);
     }
+    @Test void ownHistoryFiltersStatusAndStartDateAndBindsCursorToCriteria()throws Exception {
+        var store=personalApp.getBean(ReservationStore.class);var first=store.create(new CreateReservation(user,room,seat,period(),1),"history-filter-one");
+        var secondPeriod=new TimeRange(period().endAt(),period().endAt().plusSeconds(3600));
+        var second=store.create(new CreateReservation(user,room,UUID.randomUUID(),secondPeriod,1),"history-filter-two");
+        var jdbc=new JdbcTemplate(pg.getPostgresDatabase());jdbc.update("update m1.reservations set status='COMPLETED' where id=?",first.id());jdbc.update("update m1.reservations set status='NO_SHOW' where id=?",second.id());
+        String from=period().startAt().minusSeconds(60).toString(),to=secondPeriod.endAt().plusSeconds(60).toString();
+        var filtered=body(personalGet("/api/m1/v1/reservations?status=NO_SHOW&from="+from+"&to="+to));
+        assertEquals(1,filtered.path("items").size());assertEquals(second.id().toString(),filtered.at("/items/0/id").asText());
+        var firstPage=body(personalGet("/api/m1/v1/reservations?size=1"));String cursor=firstPage.path("nextCursor").asText();assertFalse(cursor.isBlank());
+        assertEquals(400,personalGet("/api/m1/v1/reservations?size=1&status=NO_SHOW&cursor="+cursor).statusCode());
+        assertEquals(400,personalGet("/api/m1/v1/reservations?status=UNKNOWN").statusCode());
+        assertEquals(400,personalGet("/api/m1/v1/reservations?from="+from).statusCode());
+    }
     @Test void ordinaryGatewayStillRequiresCsrfOriginAndCreatePermission()throws Exception {
         String token=body(personalGet("/api/m1/v1/csrf")).path("token").asText();
         assertEquals(403,personalPost(null,"https://campus.example").statusCode());assertEquals(403,personalPost(token,"https://evil.example").statusCode());
@@ -284,11 +297,13 @@ class QueryHttpTest {
     @Test void ordinaryOwnerChecksInOnceThroughProtectedHttp()throws Exception {
         String token=body(personalGet("/api/m1/v1/csrf")).path("token").asText();
         var created=personalPost(token,"https://campus.example");UUID id=UUID.fromString(body(created).path("id").asText());
-        Instant start=Instant.now().minusSeconds(1);new JdbcTemplate(pg.getPostgresDatabase()).update("update m1.reservations set start_at=?,end_at=? where id=?",java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),id);
         var codes=new DailyCheckInCode("c".repeat(32).getBytes(java.nio.charset.StandardCharsets.US_ASCII),Clock.systemUTC());String code=codes.current(room).code();
+        Instant future=Instant.now().plusSeconds(21*60);var jdbc=new JdbcTemplate(pg.getPostgresDatabase());jdbc.update("update m1.reservations set start_at=?,end_at=? where id=?",java.sql.Timestamp.from(future),java.sql.Timestamp.from(future.plusSeconds(3600)),id);
+        var early=personalCheckIn(id,code,token,"https://campus.example");assertEquals(409,early.statusCode(),early.body());assertEquals("CHECK_IN_TOO_EARLY",body(early).path("code").asText());
+        Instant start=Instant.now().minusSeconds(1);jdbc.update("update m1.reservations set start_at=?,end_at=? where id=?",java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),id);
         var checked=personalCheckIn(id,code,token,"https://campus.example");assertEquals(200,checked.statusCode(),checked.body());assertEquals("CHECKED_IN",body(checked).path("status").asText());assertFalse(body(checked).path("idempotent").asBoolean(true));assertFalse(body(checked).path("checkedInAt").asText().isEmpty());assertFalse(body(checked).path("serverTime").asText().isEmpty());
         var replay=personalCheckIn(id,"invalid",token,"https://campus.example");assertEquals(200,replay.statusCode(),replay.body());assertTrue(body(replay).path("idempotent").asBoolean());
-        var jdbc=new JdbcTemplate(pg.getPostgresDatabase());assertEquals(1,jdbc.queryForObject("select count(*) from m1.reservation_transitions",Integer.class));assertEquals(1,jdbc.queryForObject("select count(*) from m1.outbox_events where event_type='RESERVATION_CHECKED_IN'",Integer.class));assertFalse(checked.body().contains(code));
+        assertEquals(1,jdbc.queryForObject("select count(*) from m1.reservation_transitions",Integer.class));assertEquals(1,jdbc.queryForObject("select count(*) from m1.outbox_events where event_type='RESERVATION_CHECKED_IN'",Integer.class));assertFalse(checked.body().contains(code));
     }
     @Test void checkInRejectsMissingCsrfForeignOwnerAndWrongCode()throws Exception {
         String token=body(personalGet("/api/m1/v1/csrf")).path("token").asText();var record=personalApp.getBean(ReservationStore.class).create(new CreateReservation(user,room,seat,period(),1),"http-checkin");

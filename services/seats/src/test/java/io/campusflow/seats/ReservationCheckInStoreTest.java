@@ -51,6 +51,18 @@ class ReservationCheckInStoreTest {
         assertTrue(replay.idempotent());assertEquals(2,replay.reservation().version());assertEquals(1,count("reservation_transitions"));assertEquals(2,count("outbox_events"));
     }
 
+    @Test void checkInOpensExactlyTwentyMinutesBeforeStartWithoutRecordingEarlyAttempts() {
+        var tooEarly=Clock.fixed(START.minus(Duration.ofMinutes(20)).minusNanos(1),ZoneOffset.UTC);
+        assertCode(CheckInException.Code.CHECK_IN_TOO_EARLY,
+                ()->store(tooEarly).checkIn(user,reservation.id(),codes(tooEarly).current(room).code(),codes(tooEarly),()->{}));
+        assertEquals("CONFIRMED",jdbc.queryForObject("select status from m1.reservations where id=?",String.class,reservation.id()));
+        assertEquals(0,count("reservation_transitions"));assertEquals(0,count("checkin_rate_limits"));
+
+        var boundary=Clock.fixed(START.minus(Duration.ofMinutes(20)),ZoneOffset.UTC);
+        assertEquals(ReservationStatus.CHECKED_IN,store(boundary).checkIn(user,reservation.id(),
+                codes(boundary).current(room).code(),codes(boundary),()->{}).reservation().status());
+    }
+
     @Test void checkInIsAllowedBeforeDeadlineButExactDeadlineAtomicallyBecomesNoShow() {
         UUID laterUser=UUID.randomUUID(),laterSeat=UUID.randomUUID();
         var laterReservation=store(Clock.fixed(START.minusSeconds(3600),ZoneOffset.UTC)).create(
@@ -72,10 +84,10 @@ class ReservationCheckInStoreTest {
     }
 
     @Test void usageTimelineAndLeaveSeatArePersistedAndIdempotent() {
-        var checkedAt=Clock.fixed(START.minus(Duration.ofHours(1)),ZoneOffset.UTC);var checkCodes=codes(checkedAt);
+        var checkedAt=Clock.fixed(START.minus(Duration.ofMinutes(10)),ZoneOffset.UTC);var checkCodes=codes(checkedAt);
         store(checkedAt).checkIn(user,reservation.id(),checkCodes.current(room).code(),checkCodes,()->{});
         var active=store(checkedAt).usageForUser(user,reservation.id());
-        assertEquals(START.minus(Duration.ofHours(1)),active.checkedInAt());assertNull(active.completedAt());
+        assertEquals(START.minus(Duration.ofMinutes(10)),active.checkedInAt());assertNull(active.completedAt());
         var leftAt=Clock.fixed(START.plus(Duration.ofMinutes(30)),ZoneOffset.UTC);
         var left=store(leftAt).leaveSeat(user,reservation.id(),()->{});
         assertFalse(left.idempotent());assertEquals(ReservationStatus.COMPLETED,left.reservation().status());assertEquals(3,left.reservation().version());
