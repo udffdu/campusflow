@@ -20,7 +20,7 @@ it('treats a successful but incomplete JSON response as unknown instead of succe
   await expect(submitReservation(p)).rejects.toMatchObject({code:'RESULT_UNKNOWN'})
 })
 it('checks in with only reservation id, daily code and the separate M1 CSRF token',async()=>{
-  const checked={id:'booking',...p.intent,status:'CHECKED_IN',version:2,resourceVersion:1,stage:'PERSONAL',productionReady:false}
+  const checked={id:'booking',...p.intent,status:'CHECKED_IN',version:2,resourceVersion:1,stage:'PERSONAL',productionReady:false,checkedInAt:'2026-10-29T01:00:00Z',completedAt:null,serverTime:'2026-10-29T01:05:00Z'}
   const fetch=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({token:'check-token'}))).mockResolvedValueOnce(new Response(JSON.stringify(checked)));vi.stubGlobal('fetch',fetch)
   await expect(checkInReservation('booking','012345')).resolves.toMatchObject({status:'CHECKED_IN',version:2})
   expect(fetch.mock.calls[1]).toEqual(['/api/m1/v1/reservations/booking/check-in',expect.objectContaining({method:'POST',headers:{'Content-Type':'application/json','X-M1-CSRF-Token':'check-token'},body:'{"code":"012345"}'})])

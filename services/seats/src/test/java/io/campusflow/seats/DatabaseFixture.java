@@ -47,9 +47,21 @@ public final class DatabaseFixture {
                     if(total!=2)throw new IllegalStateException("reminder fixture did not create both events");
                     value=Map.of("reservationId",id,"inserted",inserted);
                 }
+                else if(op.equals("makeNoShowDue")){
+                    var jdbc=new JdbcTemplate(pg.getPostgresDatabase());
+                    UUID id=UUID.fromString(json.readTree(line).path("reservationId").asText());
+                    java.time.Instant start=java.time.Instant.now().minusSeconds(15*60+2);
+                    java.time.Instant end=start.plusSeconds(60*60);
+                    int changed=jdbc.update("""
+                            update m1.reservations set start_at=?,end_at=?,updated_at=now()
+                            where id=? and status='CONFIRMED'
+                            """,java.sql.Timestamp.from(start),java.sql.Timestamp.from(end),id);
+                    if(changed!=1)throw new IllegalArgumentException("confirmed reservation fixture not found");
+                    value=Map.of("reservationId",id,"startAt",start.toString(),"endAt",end.toString());
+                }
                 else if(op.equals("snapshot")){
                     var jdbc=new JdbcTemplate(pg.getPostgresDatabase());var snapshot=new TreeMap<String,Object>();
-                    for(String table:List.of("reservations","reservation_requests","outbox_events","reservation_transitions","checkin_rate_limits"))snapshot.put(table,jdbc.queryForObject("select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb)::text from m1."+table+" t",String.class));
+                    for(String table:List.of("reservations","reservation_requests","outbox_events","reservation_transitions","reservation_violations","checkin_rate_limits"))snapshot.put(table,jdbc.queryForObject("select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb)::text from m1."+table+" t",String.class));
                     value=snapshot;
                 }else throw new IllegalArgumentException("unknown database fixture operation");
                 System.out.println("FIXTURE_REPLY "+json.writeValueAsString(value));System.out.flush();

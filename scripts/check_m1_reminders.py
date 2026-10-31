@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isolated CF-M1-008/009 real D/M1/PostgreSQL/SMTP verification and optional real-mail preview."""
+"""Isolated CF-M1-008/009/010 real D/M1/PostgreSQL/SMTP verification and optional preview."""
 import argparse
 import base64
 from contextlib import ExitStack
@@ -107,12 +107,17 @@ def iso(value):return value.astimezone(timezone.utc).isoformat().replace('+00:00
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--preview',action='store_true');parser.add_argument('--real-mail',action='store_true')
+    parser.add_argument('--no-show',action='store_true',help='自动验证超时取消、违约记录与通知投递')
     parser.add_argument('--manual-booking',action='store_true',help='等待用户在前端完成预约，再立即推进两个提醒时间点')
+    parser.add_argument('--manual-no-show',action='store_true',help='等待用户在前端完成预约，再仅在隔离数据库推进至未签到超时')
     parser.add_argument('--d-port',type=int,default=18280);parser.add_argument('--m1-port',type=int,default=18281);parser.add_argument('--web-port',type=int,default=5374)
     parser.add_argument('--mailbox-port',type=int,default=8025)
     args=parser.parse_args()
     if args.real_mail and not args.preview:parser.error('--real-mail 只能与 --preview 一起使用')
     if args.manual_booking and not args.preview:parser.error('--manual-booking 只能与 --preview 一起使用')
+    if args.manual_no_show and not args.preview:parser.error('--manual-no-show 只能与 --preview 一起使用')
+    if args.manual_booking and args.manual_no_show:parser.error('--manual-booking 与 --manual-no-show 不能同时使用')
+    if args.no_show and args.preview:parser.error('--no-show 是自动检查模式；人工预览请使用 --manual-no-show')
     if args.preview:
         dport,mport=args.d_port,args.m1_port;check_ports([dport,mport]+([] if args.real_mail else [args.mailbox_port]))
         with socket.socket(socket.AF_INET6) as probe:probe.bind(('::1',args.web_port))
@@ -136,6 +141,7 @@ def main():
                M1_BROWSER_ORIGIN=origin,M1_CSRF_SECRET=base64.b64encode(secrets.token_bytes(32)).decode(),
                M1_CHECKIN_SECRET=base64.b64encode(secrets.token_bytes(32)).decode(),M1_REMINDERS_ENABLED='true',
                M1_REMINDER_DELAY='200',M1_REMINDER_INITIAL_DELAY='200',M1_REMINDER_RETRY_BASE='PT0.2S',M1_REMINDER_RETRY_MAX='PT2S',
+               M1_LIFECYCLE_ENABLED='true',M1_LIFECYCLE_DELAY='200',M1_LIFECYCLE_INITIAL_DELAY='200',
                PLATFORM_MAIL_ENABLED='true',PLATFORM_EMAIL_DELIVERY_DELAY_MS='200',PLATFORM_DELIVERY_DELAY_MS='200')
     if capture:
         env.update(PLATFORM_SMTP_HOST='127.0.0.1',PLATFORM_SMTP_PORT=str(capture.port),PLATFORM_MAIL_FROM='campusflow@example.test',
@@ -164,8 +170,44 @@ def main():
                         time.sleep(.1)
                 else:raise RuntimeError('提醒预览前端启动超时')
                 mailbox='真实邮箱' if args.real_mail else f'模拟收件箱：http://127.0.0.1:{args.mailbox_port}'
-                entry='/seat-reservations' if args.manual_booking else '/notifications'
+                entry='/my-reservations' if args.manual_no_show else '/seat-reservations' if args.manual_booking else '/notifications'
                 print(f'提醒预览：{origin}{entry}\n{mailbox}\n学生账号 student，密码为终端设置值。\n前端、D、M1 和数据库均为本次隔离环境；请保留终端，Ctrl+C 会清理本次环境。',flush=True)
+            if args.manual_no_show:
+                known={row['id'] for row in json.loads(database.command({'op':'snapshot'})['reservations'])}
+                processed=0
+                def advance_to_no_show(reservation):
+                    nonlocal processed
+                    known.add(reservation['id'])
+                    print(f'已检测到预约 {reservation["id"]}，正在触发未签到超时……',flush=True)
+                    database.command({'op':'makeNoShowDue','reservationId':reservation['id']})
+                    def no_show_delivered(reservation_id=reservation['id']):
+                        snapshot=database.command({'op':'snapshot'})
+                        rows=json.loads(snapshot['reservations']);violations=json.loads(snapshot['reservation_violations'])
+                        events=json.loads(snapshot['outbox_events'])
+                        state=next((row for row in rows if row['id']==reservation_id),None)
+                        violation_count=sum(row['reservation_id']==reservation_id for row in violations)
+                        delivered=sum(event['reservation_id']==reservation_id and event['event_type']=='RESERVATION_NO_SHOW'
+                                      and event['status']=='DELIVERED' for event in events)
+                        return state and state['status']=='NO_SHOW' and violation_count==1 and delivered==1
+                    wait_until(no_show_delivered,15)
+                    processed+=1;target='真实邮箱' if args.real_mail else '模拟收件箱'
+                    print(f'预约 {reservation["id"]} 已取消、座位已释放、违约与通知均已落库投递（本次共处理 {processed} 笔）。请刷新“我的预约”并检查{target}、通知弹窗。',flush=True)
+
+                # Give the visual preview an immediately inspectable violation. This uses the
+                # public reservation API first; only the disposable fixture changes its time.
+                now=datetime.now(timezone.utc);regular=(now+timedelta(hours=2)).replace(minute=0,second=0,microsecond=0)
+                body=dict(roomId=resources['room']['id'],seatId=resources['seats'][0]['id'],startAt=iso(regular),endAt=iso(regular+timedelta(hours=1)))
+                csrf=student.request('/api/m1/v1/csrf',base=m_base)[1]['token']
+                sample=student.request('/api/m1/v1/reservations','POST',body,201,base=m_base,
+                                       headers={'Origin':origin,'Idempotency-Key':'no-show-visual-sample','X-M1-CSRF-Token':csrf})[1]
+                advance_to_no_show(sample)
+                print('红色违约示例已准备完成。请登录后进入“我的预约”；也可以继续手工创建预约，脚本会逐笔推进。',flush=True)
+                while all(process.process.poll() is None for process in (d,m1,database,web)):
+                    created=[row for row in json.loads(database.command({'op':'snapshot'})['reservations']) if row['id'] not in known]
+                    for reservation in created:
+                        advance_to_no_show(reservation)
+                    time.sleep(.4)
+                raise RuntimeError('未签到预览服务意外退出')
             if args.manual_booking:
                 known={row['id'] for row in json.loads(database.command({'op':'snapshot'})['reservations'])}
                 delivered_count=0
@@ -192,6 +234,30 @@ def main():
                 body=dict(roomId=resources['room']['id'],seatId=resources['seats'][0]['id'],startAt=iso(regular),endAt=iso(regular+timedelta(hours=1)))
                 csrf=student.request('/api/m1/v1/csrf',base=m_base)[1]['token']
                 reservation=student.request('/api/m1/v1/reservations','POST',body,201,base=m_base,headers={'Origin':origin,'Idempotency-Key':'reminder-preview','X-M1-CSRF-Token':csrf})[1]
+            if args.no_show:
+                database.command({'op':'makeNoShowDue','reservationId':reservation['id']})
+                def no_show_state():
+                    snapshot=database.command({'op':'snapshot'})
+                    rows=json.loads(snapshot['reservations']);violations=json.loads(snapshot['reservation_violations'])
+                    events=json.loads(snapshot['outbox_events'])
+                    state=next((row for row in rows if row['id']==reservation['id']),None)
+                    violation_count=sum(row['reservation_id']==reservation['id'] for row in violations)
+                    delivered=[event for event in events if event['reservation_id']==reservation['id']
+                               and event['event_type']=='RESERVATION_NO_SHOW' and event['status']=='DELIVERED']
+                    return snapshot if state and state['status']=='NO_SHOW' and state['version']==2 and violation_count==1 and len(delivered)==1 else None
+                snapshot=wait_until(no_show_state,18)
+                messages=wait_until(lambda:capture.parsed() if len(capture.parsed())>=1 else None,12)
+                assert len(messages)==1
+                recipient,message=messages[0];plain=message.get_body(preferencelist=('plain',)) if message.is_multipart() else message
+                content=str(plain.get_content())
+                assert recipient==student_email and str(message['Subject']).startswith('预约已因未签到取消｜')
+                assert resources['room']['code'] in content and resources['seats'][0]['code'] in content
+                assert '释放座位' in content and '未签到违约' in content
+                inbox=wait_until(lambda:(lambda value:value if any(item['title'].startswith('预约已因未签到取消｜') for item in value['items']) else None)(student.request('/api/v1/notifications?size=20')[1]),8)
+                assert sum(row['reservation_id']==reservation['id'] for row in json.loads(snapshot['reservation_violations']))==1
+                time.sleep(1);assert len(capture.parsed())==1
+                print('PASS CF-M1-010: atomic no-show cancellation, occupancy release fact, one violation and durable in-app/email notification',flush=True)
+                return
             early_start=datetime.now(timezone.utc)+timedelta(minutes=14)
             database.command({'op':'setPeriod','reservationId':reservation['id'],'startAt':iso(early_start),'endAt':iso(early_start+timedelta(hours=1))})
             if args.preview:

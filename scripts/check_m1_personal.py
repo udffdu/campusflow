@@ -58,7 +58,8 @@ def main():
          and k not in ('PORT','M2_SERVICE_KEY','M3_SERVICE_KEY','DEBUG','TRACE')}
     key=secrets.token_urlsafe(40);csrf=base64.b64encode(secrets.token_bytes(32)).decode();checkin=base64.b64encode(secrets.token_bytes(32)).decode()
     env.update(BOOTSTRAP_ADMIN_PASSWORD=password,M1_D_BASE_URL=f'http://127.0.0.1:{dport}',M1_SERVICE_KEY=key,
-               M1_ADVANCE_MODE='CALENDAR_DAYS',M1_MAX_ADVANCE='PT24H',M1_MAX_DURATION='PT4H',M1_WRITE_ENABLED='true',M1_BROWSER_ORIGIN=origin,M1_CSRF_SECRET=csrf,M1_CHECKIN_SECRET=checkin)
+               M1_ADVANCE_MODE='CALENDAR_DAYS',M1_MAX_ADVANCE='PT24H',M1_MAX_DURATION='PT4H',M1_WRITE_ENABLED='true',M1_BROWSER_ORIGIN=origin,M1_CSRF_SECRET=csrf,M1_CHECKIN_SECRET=checkin,
+               M1_LIFECYCLE_ENABLED='true')
     logs=ROOT/'tmp'/('m1-personal-'+str(time.time_ns()));logs.mkdir(parents=True)
     with ExitStack() as stack:
         folder=ROOT/'services/seats';cp=os.pathsep.join([str(folder/'target/test-classes'),str(folder/'target/classes'),(folder/'target/http-classpath.txt').read_text(encoding='utf-8').strip()])
@@ -86,7 +87,7 @@ def main():
                     if web.process.poll() is not None:raise RuntimeError('个人预约前端启动失败')
                     time.sleep(.1)
             else:raise RuntimeError('个人预约前端启动超时')
-            print(f'普通M1个人预约/签到预览：{origin}/my-reservations\n学生账号student、空间管理员账号manager，密码均为终端设置值。\n已为student准备一条A101预约；当前体验阶段不限制签到时间，正确签到后进入计时与退座页面。\nmanager可在空间资源的A101详情打开签到码显示页。M1以生产jar运行，数据库为独立临时数据；整室申请/维修限制尚未接入。\n使用[::1]隔离旧演示Cookie；保留终端，Ctrl+C只清理本次预览。',flush=True)
+            print(f'普通M1个人预约/签到预览：{origin}/my-reservations\n学生账号student、空间管理员账号manager，密码均为终端设置值。\n已为student准备一条A101预约；须在预约开始后15分钟内签到，正确签到后进入计时与退座页面。\nmanager可在空间资源的A101详情打开签到码显示页。M1以生产jar运行，数据库为独立临时数据；整室申请/维修限制尚未接入。\n使用[::1]隔离旧演示Cookie；保留终端，Ctrl+C只清理本次预览。',flush=True)
             while all(p.process.poll() is None for p in (personal,d,web,database)):time.sleep(1)
             raise RuntimeError('预览服务意外退出')
         closed_port=free_port();closed_env=dict(env,M1_WRITE_ENABLED='false',M1_PERSONAL_DEMO='true')

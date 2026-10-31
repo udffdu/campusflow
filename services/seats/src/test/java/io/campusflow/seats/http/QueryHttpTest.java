@@ -73,7 +73,7 @@ class QueryHttpTest {
     @AfterAll void stop() throws Exception {if(personalApp!=null)personalApp.close();if(demoApp!=null)demoApp.close();if(app!=null)app.close();if(pg!=null)pg.close();if(upstream!=null)upstream.stop(0);if(workers!=null)workers.shutdownNow();}
     @BeforeEach void reset() {
         calls.clear();responder=this::normal;
-        new JdbcTemplate(pg.getPostgresDatabase()).execute("truncate m1.checkin_rate_limits,m1.reservation_transitions,m1.outbox_events,m1.reservation_requests,m1.reservations");
+        new JdbcTemplate(pg.getPostgresDatabase()).execute("truncate m1.reservation_violations,m1.checkin_rate_limits,m1.reservation_transitions,m1.outbox_events,m1.reservation_requests,m1.reservations");
     }
     private Map<String,Object> identity(boolean allowed,Set<String> permissions) {
         return Map.of("allowed",allowed,"identity",Map.of("id",user,"departmentId",dept,"active",true,"permissions",permissions));
@@ -218,7 +218,8 @@ class QueryHttpTest {
         store.create(new CreateReservation(other,room,other,period(),1),"history-foreign");
         var later=new TimeRange(period().endAt(),period().endAt().plusSeconds(3600));
         var second=store.create(new CreateReservation(user,room,seat,later,1),"history-two");
-        var a=body(get("/api/m1/v1/reservations?size=1",true));assertEquals(1,a.path("items").size());assertFalse(a.path("nextCursor").asText().isEmpty());
+        var a=body(get("/api/m1/v1/reservations?size=1",true));assertEquals(1,a.path("items").size());assertFalse(a.path("nextCursor").asText().isEmpty());assertFalse(a.path("serverTime").asText().isEmpty());
+        assertTrue(a.path("items").get(0).path("checkedInAt").isNull());assertEquals(0,a.path("items").get(0).path("usageDurationSeconds").asLong());assertTrue(a.path("items").get(0).path("violationReason").isNull());
         var b=body(get("/api/m1/v1/reservations?size=1&cursor="+a.path("nextCursor").asText(),true));
         assertEquals(Set.of(first.id().toString(),second.id().toString()),Set.of(a.path("items").get(0).path("id").asText(),b.path("items").get(0).path("id").asText()));
         assertEquals("",b.path("nextCursor").asText());counts(3);
@@ -285,7 +286,7 @@ class QueryHttpTest {
         var created=personalPost(token,"https://campus.example");UUID id=UUID.fromString(body(created).path("id").asText());
         Instant start=Instant.now().minusSeconds(1);new JdbcTemplate(pg.getPostgresDatabase()).update("update m1.reservations set start_at=?,end_at=? where id=?",java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),id);
         var codes=new DailyCheckInCode("c".repeat(32).getBytes(java.nio.charset.StandardCharsets.US_ASCII),Clock.systemUTC());String code=codes.current(room).code();
-        var checked=personalCheckIn(id,code,token,"https://campus.example");assertEquals(200,checked.statusCode(),checked.body());assertEquals("CHECKED_IN",body(checked).path("status").asText());assertFalse(body(checked).path("idempotent").asBoolean(true));
+        var checked=personalCheckIn(id,code,token,"https://campus.example");assertEquals(200,checked.statusCode(),checked.body());assertEquals("CHECKED_IN",body(checked).path("status").asText());assertFalse(body(checked).path("idempotent").asBoolean(true));assertFalse(body(checked).path("checkedInAt").asText().isEmpty());assertFalse(body(checked).path("serverTime").asText().isEmpty());
         var replay=personalCheckIn(id,"invalid",token,"https://campus.example");assertEquals(200,replay.statusCode(),replay.body());assertTrue(body(replay).path("idempotent").asBoolean());
         var jdbc=new JdbcTemplate(pg.getPostgresDatabase());assertEquals(1,jdbc.queryForObject("select count(*) from m1.reservation_transitions",Integer.class));assertEquals(1,jdbc.queryForObject("select count(*) from m1.outbox_events where event_type='RESERVATION_CHECKED_IN'",Integer.class));assertFalse(checked.body().contains(code));
     }

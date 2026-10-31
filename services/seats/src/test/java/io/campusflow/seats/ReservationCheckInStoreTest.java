@@ -24,11 +24,11 @@ class ReservationCheckInStoreTest {
     @BeforeAll static void database() throws Exception {
         postgres = EmbeddedPostgres.builder().setPort(0).setServerConfig("listen_addresses", "127.0.0.1").start();
         dataSource = postgres.getPostgresDatabase(); jdbc = new JdbcTemplate(dataSource);
-        assertEquals(3, Flyway.configure().dataSource(dataSource).schemas("m1").defaultSchema("m1").load().migrate().migrationsExecuted);
+        assertEquals(4, Flyway.configure().dataSource(dataSource).schemas("m1").defaultSchema("m1").load().migrate().migrationsExecuted);
     }
     @AfterAll static void close() throws Exception { if (postgres != null) postgres.close(); }
     @BeforeEach void reset() {
-        jdbc.execute("truncate m1.checkin_rate_limits,m1.reservation_transitions,m1.outbox_events,m1.reservation_requests,m1.reservations");
+        jdbc.execute("truncate m1.reservation_violations,m1.checkin_rate_limits,m1.reservation_transitions,m1.outbox_events,m1.reservation_requests,m1.reservations");
         reservation = store(Clock.fixed(START.minusSeconds(3600), ZoneOffset.UTC)).create(
                 new CreateReservation(user, room, seat, new TimeRange(START, START.plusSeconds(3600)), 1), "check-in");
     }
@@ -51,14 +51,17 @@ class ReservationCheckInStoreTest {
         assertTrue(replay.idempotent());assertEquals(2,replay.reservation().version());assertEquals(1,count("reservation_transitions"));assertEquals(2,count("outbox_events"));
     }
 
-    @Test void checkInDoesNotApplyReservationTimeWindow() {
+    @Test void checkInIsAllowedBeforeDeadlineButExactDeadlineAtomicallyBecomesNoShow() {
         UUID laterUser=UUID.randomUUID(),laterSeat=UUID.randomUUID();
         var laterReservation=store(Clock.fixed(START.minusSeconds(3600),ZoneOffset.UTC)).create(
                 new CreateReservation(laterUser,room,laterSeat,new TimeRange(START,START.plusSeconds(3600)),1),"later-check-in");
         var before=Clock.fixed(START.minusNanos(1),ZoneOffset.UTC);
         assertEquals(ReservationStatus.CHECKED_IN,store(before).checkIn(user,reservation.id(),codes(before).current(room).code(),codes(before),()->{}).reservation().status());
-        var later=Clock.fixed(START.plus(Duration.ofHours(2)),ZoneOffset.UTC);
-        assertEquals(ReservationStatus.CHECKED_IN,store(later).checkIn(laterUser,laterReservation.id(),codes(later).current(room).code(),codes(later),()->{}).reservation().status());
+        var deadline=Clock.fixed(START.plus(Duration.ofMinutes(15)),ZoneOffset.UTC);
+        assertCode(CheckInException.Code.CHECK_IN_DEADLINE_PASSED,
+                ()->store(deadline).checkIn(laterUser,laterReservation.id(),codes(deadline).current(room).code(),codes(deadline),()->{}));
+        assertEquals("NO_SHOW",jdbc.queryForObject("select status from m1.reservations where id=?",String.class,laterReservation.id()));
+        assertEquals(1,jdbc.queryForObject("select count(*) from m1.reservation_violations where reservation_id=?",Integer.class,laterReservation.id()));
     }
 
     @Test void terminalStateCannotBeCheckedIn() {

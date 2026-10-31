@@ -26,6 +26,14 @@ class ReminderWorkerTest {
         assertTrue(notification.body().contains("预约已开始超过 10 分钟，目前仍未签到"));
     }
 
+    @Test void noShowNoticeExplainsCancellationReleaseAndViolation(){
+        var notification=ReminderWorker.notification(delivery(ReminderStore.NO_SHOW),room(),seat());
+        assertEquals("预约已因未签到取消｜A101 · S01",notification.title());
+        assertTrue(notification.body().contains("教室：A101研讨室（A101）"));
+        assertTrue(notification.body().contains("座位：靠窗01号座位（S01）"));
+        assertTrue(notification.body().contains("取消预约、释放座位，并记录一次未签到违约"));
+    }
+
     private ReminderStore.Delivery delivery(String type){
         return new ReminderStore.Delivery(UUID.randomUUID(),type,reservation,user,roomId,seatId,
                 Instant.parse("2026-10-30T06:00:00Z"),Instant.parse("2026-10-30T07:00:00Z"),1);

@@ -53,7 +53,7 @@ class SeatAvailabilityQueryTest {
     }
 
     @BeforeEach void reset() {
-        jdbc.execute("truncate m1.checkin_rate_limits, m1.reservation_transitions, m1.outbox_events, m1.reservation_requests, m1.reservations");
+        jdbc.execute("truncate m1.reservation_violations, m1.checkin_rate_limits, m1.reservation_transitions, m1.outbox_events, m1.reservation_requests, m1.reservations");
         var policy = new ReservationPolicy(Duration.ofHours(24), Duration.ofHours(4), CLOCK);
         store = new ReservationStore(dataSource, policy, CLOCK, Duration.ofSeconds(2));
         query = new SeatAvailabilityQuery(store, policy);

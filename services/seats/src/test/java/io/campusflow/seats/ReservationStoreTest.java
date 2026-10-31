@@ -48,7 +48,7 @@ class ReservationStoreTest {
         dataSource = postgres.getPostgresDatabase();
         jdbc = new JdbcTemplate(dataSource);
         flyway = Flyway.configure().dataSource(dataSource).schemas("m1").defaultSchema("m1").load();
-        assertEquals(3, flyway.migrate().migrationsExecuted);
+        assertEquals(4, flyway.migrate().migrationsExecuted);
     }
 
     @AfterAll static void closeDatabase() throws Exception {
@@ -56,7 +56,7 @@ class ReservationStoreTest {
     }
 
     @BeforeEach void reset() {
-        jdbc.execute("truncate m1.checkin_rate_limits, m1.reservation_transitions, m1.outbox_events, m1.reservation_requests, m1.reservations");
+        jdbc.execute("truncate m1.reservation_violations, m1.checkin_rate_limits, m1.reservation_transitions, m1.outbox_events, m1.reservation_requests, m1.reservations");
         store = store(CLOCK, Duration.ofSeconds(2));
     }
 
@@ -154,6 +154,35 @@ class ReservationStoreTest {
         assertTrue(store.historyForUser(user,null,20).items().isEmpty());
         assertThrows(IllegalArgumentException.class,()->store.historyForUser(user,null,0));
         assertThrows(IllegalArgumentException.class,()->store.historyForUser(user,null,51));assertCounts(0,0,0);
+    }
+
+    @Test void detailedHistoryAggregatesUsageAndViolationWithoutPerRowReads() {
+        var completed=store.create(request(),"detailed-completed");
+        jdbc.update("update m1.reservations set status='COMPLETED',version=3 where id=?",completed.id());
+        jdbc.update("""
+                insert into m1.reservation_transitions
+                (transition_id,reservation_id,from_status,to_status,reason,actor_user_id,reservation_version,occurred_at)
+                values (?,?,'CONFIRMED','CHECKED_IN','USER_CHECK_IN',?,2,?),
+                       (?,?,'CHECKED_IN','COMPLETED','USER_LEAVE_SEAT',?,3,?)
+                """,UUID.randomUUID(),completed.id(),user,Timestamp.from(at("09:05:00")),
+                UUID.randomUUID(),completed.id(),user,Timestamp.from(at("10:05:06")));
+        var noShow=store.create(new CreateReservation(user,room,UUID.randomUUID(),
+                new TimeRange(at("11:00:00"),at("12:00:00")),7),"detailed-no-show");
+        jdbc.update("update m1.reservations set status='NO_SHOW',version=2 where id=?",noShow.id());
+        jdbc.update("""
+                insert into m1.reservation_violations
+                (violation_id,reservation_id,user_id,room_id,seat_id,start_at,end_at,reason,recorded_at,reservation_version)
+                values (?,?,?,?,?,?,?,'NO_SHOW',?,2)
+                """,UUID.randomUUID(),noShow.id(),user,room,noShow.seatId(),Timestamp.from(noShow.period().startAt()),
+                Timestamp.from(noShow.period().endAt()),Timestamp.from(at("11:15:00")));
+
+        var history=store.detailedHistoryForUser(user,null,20);
+        assertEquals(CLOCK.instant(),history.serverTime());assertEquals(2,history.items().size());
+        var completedEntry=history.items().stream().filter(item->item.reservation().id().equals(completed.id())).findFirst().orElseThrow();
+        assertEquals(at("09:05:00"),completedEntry.checkedInAt());assertEquals(at("10:05:06"),completedEntry.completedAt());
+        assertEquals(3606,completedEntry.usageDurationSeconds());assertNull(completedEntry.violationReason());
+        var violation=history.items().stream().filter(item->item.reservation().id().equals(noShow.id())).findFirst().orElseThrow();
+        assertEquals("NO_SHOW",violation.violationReason());assertEquals(0,violation.usageDurationSeconds());
     }
 
     @Test void overlappingSeatIsRejected() {

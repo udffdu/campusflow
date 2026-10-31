@@ -20,10 +20,10 @@ class ReminderStoreTest {
     @BeforeAll static void database()throws Exception{
         postgres=EmbeddedPostgres.builder().setPort(0).setServerConfig("listen_addresses","127.0.0.1").start();
         source=postgres.getPostgresDatabase();jdbc=new JdbcTemplate(source);
-        assertEquals(3,Flyway.configure().dataSource(source).schemas("m1").defaultSchema("m1").load().migrate().migrationsExecuted);
+        assertEquals(4,Flyway.configure().dataSource(source).schemas("m1").defaultSchema("m1").load().migrate().migrationsExecuted);
     }
     @AfterAll static void close()throws Exception{if(postgres!=null)postgres.close();}
-    @BeforeEach void reset(){jdbc.execute("truncate m1.checkin_rate_limits,m1.reservation_transitions,m1.outbox_events,m1.reservation_requests,m1.reservations");}
+    @BeforeEach void reset(){jdbc.execute("truncate m1.reservation_violations,m1.checkin_rate_limits,m1.reservation_transitions,m1.outbox_events,m1.reservation_requests,m1.reservations");}
 
     @Test void exactBoundariesAndStatusesProduceOnlyTheTwoRequiredEvents(){
         UUID exact=reservation(NOW.plus(Duration.ofMinutes(15)),"CONFIRMED");
@@ -60,6 +60,26 @@ class ReminderStoreTest {
         store(NOW.plusSeconds(130)).delivered(retried.eventId());
         assertEquals("DELIVERED",jdbc.queryForObject("select status from m1.outbox_events",String.class));
         assertNotNull(jdbc.queryForObject("select delivered_at from m1.outbox_events",Timestamp.class));
+    }
+    @Test void noShowNotificationIsDeliverableAndStaleReminderIsSuperseded(){
+        UUID noShow=reservation(NOW.minus(Duration.ofHours(1)),"NO_SHOW");
+        jdbc.update("""
+                insert into m1.outbox_events(event_id,reservation_id,event_type,payload,created_at,next_attempt_at)
+                values (?,?,?,jsonb_build_object('reservationId',cast(? as text)),?,?)
+                """,UUID.randomUUID(),noShow,ReminderStore.NO_SHOW,noShow.toString(),Timestamp.from(NOW),Timestamp.from(NOW));
+        var store=store(NOW);
+        var violationNotice=store.claimDue(10,Duration.ofMinutes(1)).getFirst();
+        assertEquals(ReminderStore.NO_SHOW,violationNotice.eventType());
+        assertTrue(store.prepareDelivery(violationNotice));
+        store.delivered(violationNotice.eventId());
+
+        UUID stale=reservation(NOW.plus(Duration.ofMinutes(10)),"CONFIRMED");
+        assertEquals(1,store.scheduleDue(10));
+        var reminder=store.claimDue(10,Duration.ofMinutes(1)).getFirst();
+        jdbc.update("update m1.reservations set status='NO_SHOW' where id=?",stale);
+        assertFalse(store.prepareDelivery(reminder));
+        assertEquals("SUPERSEDED",jdbc.queryForObject("select status from m1.outbox_events where event_id=?",String.class,reminder.eventId()));
+        assertNotNull(jdbc.queryForObject("select superseded_at from m1.outbox_events where event_id=?",Timestamp.class,reminder.eventId()));
     }
     private ReminderStore store(Instant at){return new ReminderStore(source,Clock.fixed(at,ZoneOffset.UTC));}
     private UUID reservation(Instant start,String status){
