@@ -12,6 +12,7 @@ import AuditView from './views/AuditView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 import RoomCheckInDisplayView from './views/RoomCheckInDisplayView.vue'
 import SeatUsageView from './views/SeatUsageView.vue'
+import OperationsDashboardView from './views/OperationsDashboardView.vue'
 export const router = createRouter({ history: createWebHistory(), routes: [
   {path:'/login', component:LoginView, meta:{title:'登录'}},
   {path:'/', component:OverviewView, meta:{title:'工作台'}},
@@ -21,6 +22,7 @@ export const router = createRouter({ history: createWebHistory(), routes: [
   {path:'/my-reservations',component:MyReservationsView,meta:{title:'我的预约',permission:'seats.reservations.read.own'}},
   {path:'/room-checkin-display/:roomId',component:RoomCheckInDisplayView,meta:{title:'教室签到码',permission:'spaces.write'}},
   {path:'/seat-usage/:reservationId',component:SeatUsageView,meta:{title:'座位使用状态',permission:'seats.reservations.read.own'}},
+  {path:'/seat-operations',component:OperationsDashboardView,meta:{title:'预约运营',permission:'seats.operations.read'}},
   {path:'/resources', component:ResourcesView, meta:{title:'空间资源',permission:'spaces.read'}},
   {path:'/users', component:UsersView, meta:{title:'账号与权限',permission:'users.manage'}},
   {path:'/notifications', component:NotificationsView, meta:{title:'通知中心'}},

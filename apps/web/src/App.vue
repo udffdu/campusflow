@@ -17,6 +17,7 @@ const navigation = computed(() => [
   {path:'/',name:'工作台',icon:'grid',show:true}, {path:'/resources',name:'空间资源',icon:'space',show:can('spaces.read')},
   {path:'/seat-query',name:'座位查询',icon:'chair',show:can('seats.availability.read')},
   {path:'/my-reservations',name:'我的预约',icon:'chair',show:can('seats.reservations.read.own')},
+  {path:'/seat-operations',name:'预约运营',icon:'grid',show:can('seats.operations.read')},
   {path:'/seat-reservations',name:'座位预约',icon:'chair',show:bookingAvailable.value},
   {path:'/seat-reservation-demo',name:'个人预约演示',icon:'chair',show:demoAvailable.value},
   {path:'/notifications',name:'通知中心',icon:'bell',show:true},
