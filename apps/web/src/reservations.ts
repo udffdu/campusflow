@@ -2,10 +2,11 @@ import {ApiError} from './api'
 import {m1Get} from './m1Api'
 import type {QueryRoom} from './m1Api'
 export interface RepeatContext {reservationId:string;room:QueryRoom;seat:{id:string;code:string};requiresNewTime:true;canReserve:false}
-export interface ReservationHistory {items:OwnReservation[];size:number;nextCursor:string}
+export interface ReservationHistory {items:ReservationHistoryItem[];size:number;nextCursor:string;serverTime:string}
 export interface ReservationIntent {roomId:string;seatId:string;startAt:string;endAt:string}
 export interface PendingReservation {userId:string;key:string;intent:ReservationIntent;seatCode:string;roomCode:string}
 export interface OwnReservation extends ReservationIntent {id:string;status:string;version:number;resourceVersion:number;stage:'PERSONAL_DEMO'|'PERSONAL';productionReady:false;replayed?:boolean}
+export interface ReservationHistoryItem extends OwnReservation {checkedInAt:string|null;completedAt:string|null;usageDurationSeconds:number;violationReason:'NO_SHOW'|null}
 export interface UsageSession extends OwnReservation {checkedInAt:string;completedAt:string|null;serverTime:string;idempotent?:boolean}
 export interface Capabilities {stage:string;canCreateDemoReservation:boolean;canCreateReservation?:boolean;uncheckedSources?:string[];advanceMode?:string;advanceDays?:number;durationHours?:number;canReadOwn:boolean;productionReady:false}
 export interface RoomCheckInCode {roomId:string;roomCode:string;roomName:string;code:string;validDate:string;expiresAt:string;timeZone:'Asia/Shanghai'}
@@ -16,6 +17,16 @@ export function pendingFor(userId:string):PendingReservation|undefined {
 }
 export function savePending(p:PendingReservation){sessionStorage.setItem(prefix+p.userId,JSON.stringify(p))}
 export function validOwnReservation(value:unknown):value is OwnReservation {const v=value as OwnReservation;return !!v&&typeof v.id==='string'&&!!v.id&&typeof v.seatId==='string'&&typeof v.roomId==='string'&&Number.isFinite(Date.parse(v.startAt))&&Number.isFinite(Date.parse(v.endAt))&&['CONFIRMED','CHECKED_IN','COMPLETED','NO_SHOW','DISRUPTED'].includes(v.status)&&v.version>0&&v.resourceVersion>0&&['PERSONAL_DEMO','PERSONAL'].includes(v.stage)&&v.productionReady===false}
+export function validReservationHistoryItem(value:unknown):value is ReservationHistoryItem {
+  const v=value as ReservationHistoryItem
+  return validOwnReservation(v)&&(v.checkedInAt===null||Number.isFinite(Date.parse(v.checkedInAt)))
+    &&(v.completedAt===null||Number.isFinite(Date.parse(v.completedAt)))
+    &&Number.isInteger(v.usageDurationSeconds)&&v.usageDurationSeconds>=0
+    &&(v.violationReason===null||v.violationReason==='NO_SHOW')
+    &&(!['CHECKED_IN','COMPLETED'].includes(v.status)||v.checkedInAt!==null)
+    &&(v.status!=='COMPLETED'||v.completedAt!==null)
+    &&(v.status!=='NO_SHOW'||v.violationReason==='NO_SHOW')
+}
 export function finishPending(userId:string){sessionStorage.removeItem(prefix+userId)}
 window.addEventListener('session-expired',clearPendingReservations)
 export async function submitReservation(p:PendingReservation):Promise<OwnReservation>{
@@ -26,7 +37,7 @@ export async function submitReservation(p:PendingReservation):Promise<OwnReserva
   if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status===401)window.dispatchEvent(new Event('session-expired'));throw new ApiError(response.status,error.code??'RESULT_UNKNOWN',error.message??'尚未确认提交结果，请保留原请求重试',error.requestId)}
   try{const value=await response.json();if(!validOwnReservation(value))throw new Error('incomplete response');return value}catch{throw new ApiError(0,'RESULT_UNKNOWN','响应未完整收到，请使用原请求恢复结果')}
 }
-export async function checkInReservation(id:string,code:string):Promise<OwnReservation>{
+export async function checkInReservation(id:string,code:string):Promise<UsageSession>{
   if(!/^[0-9]{6}$/.test(code))throw new ApiError(0,'CHECK_IN_CODE_INVALID','请输入 6 位数字签到码')
   const csrf=await m1Get<{token:string;headerName:string}>('/csrf')
   let response:Response
@@ -34,7 +45,7 @@ export async function checkInReservation(id:string,code:string):Promise<OwnReser
   catch{throw new ApiError(0,'NETWORK','签到服务连接失败，请保留签到码并重试')}
   if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status===401)window.dispatchEvent(new Event('session-expired'));throw new ApiError(response.status,error.code??'CHECK_IN_FAILED',error.message??'签到失败，请稍后重试',error.requestId)}
   const value=await response.json().catch(()=>null)
-  if(!validOwnReservation(value))throw new ApiError(0,'RESULT_UNKNOWN','签到结果未完整收到，请刷新预约记录确认')
+  if(!validUsageSession(value))throw new ApiError(0,'RESULT_UNKNOWN','签到结果未完整收到，请刷新预约记录确认')
   return value
 }
 export async function usageSession(id:string):Promise<UsageSession>{
