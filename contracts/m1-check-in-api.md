@@ -53,7 +53,7 @@ Cookie: CF_SESSION=...
 
 请求体只允许一个字符串字段 `code`，不接受 `userId`、`roomId`、座位、状态或版本。沿用普通 M1 的精确 Origin、Fetch Metadata、会话绑定 CSRF 和 1 KiB 请求体上限。
 
-签到截止点为`startAt + 15分钟`。截止点前只有`CONFIRMED`可首次签到；正确的当日教室码会把预约原子更新为`CHECKED_IN`、版本加一，并写入`reservation_transitions`和唯一`RESERVATION_CHECKED_IN` outbox事实。到达或超过截止点时，签到事务在同一用户/教室锁内先执行幂等的`CONFIRMED -> NO_SHOW`终结，再返回状态冲突；不会让迟到请求复活预约。若签到事务先在截止点前成功，后续超时扫描看到`CHECKED_IN`就不会记违约。重复签到返回当前记录及`idempotent=true`，不新增转换或事件；其他终结状态不能被签到复活。
+签到窗口为`[startAt - 20分钟, startAt + 15分钟)`。早于窗口起点返回`CHECK_IN_TOO_EARLY`，预约、转换、outbox和错误码失败次数均不改变；窗口起点包含在内。窗口内只有`CONFIRMED`可首次签到，正确的当日教室码会把预约原子更新为`CHECKED_IN`、版本加一，并写入`reservation_transitions`和唯一`RESERVATION_CHECKED_IN` outbox事实。到达或超过截止点时，签到事务在同一用户/教室锁内先执行幂等的`CONFIRMED -> NO_SHOW`终结，再返回状态冲突；不会让迟到请求复活预约。若签到事务先在窗口内成功，后续超时扫描看到`CHECKED_IN`就不会记违约。重复签到返回当前记录及`idempotent=true`，不新增转换或事件；其他终结状态不能被签到复活。
 
 错误码按用户和预约记录在 M1 数据库：15 分钟失败统计窗口内，第 5 次错误后封锁 15 分钟；所有实例共享，重启不失效。封锁期间即使提供正确码也返回 429；成功后清理该预约的失败记录。前端收到无效码后清空输入并允许重新输入。响应区分：
 
@@ -61,6 +61,7 @@ Cookie: CF_SESSION=...
 | --- | --- | --- |
 | 404 | `RESERVATION_NOT_FOUND` | 不存在或不属于当前用户，统一返回以避免枚举他人记录 |
 | 409 | `CHECK_IN_STATE_CONFLICT` | 当前状态不允许首次签到 |
+| 409 | `CHECK_IN_TOO_EARLY` | 尚未到开始前20分钟，不改变预约或错误码限流记录 |
 | 422 | `CHECK_IN_CODE_INVALID` | 编码、教室或日期不匹配，可重新输入 |
 | 429 | `CHECK_IN_RATE_LIMITED` | 错误尝试达到限制 |
 | 503 | `STORAGE_UNAVAILABLE` / `D_UNAVAILABLE` | 数据库、锁或 D 不可用 |

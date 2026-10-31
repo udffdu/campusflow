@@ -8,7 +8,7 @@
 
 入口见[交付索引](m1-a-delivery.md)和[续做手册](m1-a-resume.md)。普通jar可按显式安全配置开放个人写入，默认关闭；当前窗口为上海自然日的今天/明天内开始，单次默认最多4小时。查询、创建/恢复、本人历史/复用已实现并验收，契约见[查询](../../contracts/m1-query-api.md)、[普通预约](../../contracts/m1-personal-api.md)、[历史](../../contracts/m1-history-api.md)。
 
-B现已在 M1 自有 V2 迁移和 `ReservationStore.checkIn` 中实现本人签到：按既有用户/教室锁顺序，锁内重读并再次在线授权，使用状态/版本条件将 `CONFIRMED` 原子更新为 `CHECKED_IN`，同时写转换和唯一 outbox 事实。每日码、展示页、CSRF/Origin、数据库限流、Web 输入、服务端计时使用页和 `ReservationStore.leaveSeat` 主动退座均已实现；退座把 `CHECKED_IN` 原子更新为 `COMPLETED`。CF-M1-008/009 增加 V3 提醒 outbox 租约、15/10 分钟调度、D资源补全、站内信/邮件双通道和前端弹窗；CF-M1-010 增加 V4 违约表/索引、15分钟生命周期任务、原子NO_SHOW、自动完成、通知和可视化历史；CF-M1-011 增加 M1 V5 查询索引、D V5 独立运营权限、院系范围只读统计与运营看板。契约与证据见[签到API](../../contracts/m1-check-in-api.md)、[提醒API](../../contracts/m1-reminder-api.md)、[运营API](../../contracts/m1-operations-api.md)、[提醒验证](../process/m1-reminder-validation.md)、[违约验证](../process/m1-no-show-validation.md)及[运营验证](../process/m1-operations-validation.md)。M2/M3来源仍未接入。
+B现已在 M1 自有 V2 迁移和 `ReservationStore.checkIn` 中实现本人签到：按既有用户/教室锁顺序，锁内重读并再次在线授权，只在`[startAt - 20分钟, startAt + 15分钟)`内使用状态/版本条件将 `CONFIRMED` 原子更新为 `CHECKED_IN`，同时写转换和唯一 outbox 事实；过早签到不改变预约或错误码限流记录。每日码、展示页、CSRF/Origin、数据库限流、Web 输入、服务端计时使用页和 `ReservationStore.leaveSeat` 主动退座均已实现；退座把 `CHECKED_IN` 原子更新为 `COMPLETED`。本人历史现支持服务端状态和上海日期筛选，游标绑定用户及筛选条件。CF-M1-008/009 增加 V3 提醒 outbox 租约、15/10 分钟调度、D资源补全、站内信/邮件双通道和前端弹窗；CF-M1-010 增加 V4 违约表/索引、15分钟生命周期任务、原子NO_SHOW、自动完成、通知和可视化历史；CF-M1-011 增加 M1 V5 查询索引、D V5 独立运营权限、院系范围只读统计与运营看板。契约与证据见[签到API](../../contracts/m1-check-in-api.md)、[历史API](../../contracts/m1-history-api.md)、[提醒API](../../contracts/m1-reminder-api.md)、[运营API](../../contracts/m1-operations-api.md)、[签到验证](../process/m1-check-in-validation.md)、[提醒验证](../process/m1-reminder-validation.md)、[违约验证](../process/m1-no-show-validation.md)及[运营验证](../process/m1-operations-validation.md)。完整人工预览统一使用`bash scripts/start-m1-full-preview.sh`；M2/M3来源仍未接入。
 
 下文第5节和第7～10节保留阶段演进证据；其中早期“签到未实现、HTTP/创建未实现、滚动24小时建议、普通写入关闭”等语句仅代表当时，不覆盖本摘要和第11节。
 
@@ -42,7 +42,7 @@ leafwhisper286 已明确承担 M1-A/B 内部共享设计决策，并确认下述
 
 - 创建→CONFIRMED；合法签到→CHECKED_IN；正常结束→COMPLETED。
 - 开始后15分钟未签到→NO_SHOW；系统原因取消→DISRUPTED；终结状态不能被旧请求复活。
-- 早期CF-M1-007曾暂不限制签到时间；CF-M1-010现已将最终截止确定为`startAt + 15分钟`并实现锁内NO_SHOW竞态。主动退座继续用于提前完成本次使用。
+- 早期CF-M1-007曾暂不限制签到时间；当前窗口已确定为`[startAt - 20分钟, startAt + 15分钟)`，CF-M1-010同时实现截止点的锁内NO_SHOW竞态。主动退座继续用于提前完成本次使用。
 
 ## 4. B 后续接入约束
 
@@ -137,7 +137,7 @@ ReservationStore.createValidated(intent,key,authorize,validateNew)在相同用�
 
 2026-10-30 已加入 V2 迁移、每日 HMAC 教室码、授权显示页、本人签到、服务端计时使用页、主动退座、状态转换记录、唯一生命周期事件和数据库持久化错误限流。学生动作复用 `seats.reservations.read.own` 并强制本人记录；展示复用 `spaces.write` 并强制本院系，未修改 D 权限目录或 schema。独立权限和 ADMIN 跨院系范围仍可后续评审，不能记作 D 已同意。
 
-签到截止点现为`startAt + 15分钟`；正确码在截止点前把本人`CONFIRMED`预约转为`CHECKED_IN`并进入使用页，错误码清空后可重新输入。计时使用服务端保存的`checkedInAt`、`completedAt`和`serverTime`；主动退座或预约结束以`CHECKED_IN -> COMPLETED`完成本次使用。签到、退座和超时都取得既有用户/教室锁，在锁内重读并以状态和版本条件更新；状态、转换、违约和outbox失败整体回滚，重复请求不重复写事实。到达截止点仍未签到的记录由CF-M1-010转为`NO_SHOW`，迟到签到不能复活终态。
+签到窗口现为`[startAt - 20分钟, startAt + 15分钟)`；正确码在窗口内把本人`CONFIRMED`预约转为`CHECKED_IN`并进入使用页，过早请求保持预约与限流记录不变，错误码清空后可重新输入。计时使用服务端保存的`checkedInAt`、`completedAt`和`serverTime`；主动退座或预约结束以`CHECKED_IN -> COMPLETED`完成本次使用。签到、退座和超时都取得既有用户/教室锁，在锁内重读并以状态和版本条件更新；状态、转换、违约和outbox失败整体回滚，重复请求不重复写事实。到达截止点仍未签到的记录由CF-M1-010转为`NO_SHOW`，迟到签到不能复活终态。本人历史的状态/日期筛选在服务端按本人范围执行，日期按上海自然日解释，游标不能跨用户或筛选条件复用。
 
 实际契约见[签到API](../../contracts/m1-check-in-api.md)。用户已确认当前页面流程；本地 177 项 Java、57 项前端和构建结果是本轮后续调整前的历史证据，详见[验证记录](../process/m1-check-in-validation.md)。本节不作为后续提醒改动的测试或远程CI证据；整个项目仍未部署。
 
