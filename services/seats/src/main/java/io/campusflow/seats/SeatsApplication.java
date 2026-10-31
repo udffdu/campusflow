@@ -25,4 +25,7 @@ public class SeatsApplication {
     @Bean SeatAvailabilityQuery seatQuery(ReservationStore store, ReservationPolicy policy) {
         return new SeatAvailabilityQuery(store, policy);
     }
+    @Bean ReservationOperationsStore reservationOperationsStore(DataSource source,Clock clock) {
+        return new ReservationOperationsStore(source,clock);
+    }
 }

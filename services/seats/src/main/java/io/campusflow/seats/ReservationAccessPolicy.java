@@ -14,7 +14,7 @@ public final class ReservationAccessPolicy {
         QUERY("seats.availability.read"), CREATE("seats.reservations.create"),
         READ_OWN("seats.reservations.read.own"), CHECK_IN("seats.reservations.read.own"),
         LEAVE_SEAT("seats.reservations.read.own"),
-        DISPLAY_CHECK_IN_CODE("spaces.write");
+        DISPLAY_CHECK_IN_CODE("spaces.write"), OPERATIONS_READ("seats.operations.read");
         private final String permission;
         Action(String permission) { this.permission = permission; }
         public String permission() { return permission; }
