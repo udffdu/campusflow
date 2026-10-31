@@ -59,3 +59,7 @@ bash scripts/start-m1-reminder-preview.sh --real-mail
 - 由 D 负责人评审 V4 迁移、用户邮箱字段、内部邮件端点和运维策略；
 - 在实际提交上确认远程 CI；
 - 对“创建时已经错过提醒点”的产品处理作出决策。
+
+## 与 CF-M1-010 的衔接
+
+开始后15分钟仍为`CONFIRMED`的预约现由CF-M1-010转为`NO_SHOW`；未发送的前置/迟到提醒被标记为不再适用，另生成唯一`RESERVATION_NO_SHOW`通知事实并沿用同一D站内信/邮件投递链路。取消、释放、一次违约和页面红色历史的实现与证据见[CF-M1-010验证记录](m1-no-show-validation.md)。真实SMTP限制不因复用链路而改变。

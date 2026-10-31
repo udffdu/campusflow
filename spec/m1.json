@@ -666,6 +666,26 @@
     "committed": true,
     "record": "docs/process/m1-reminder-validation.md"
   },
+  "no_show_stage": {
+    "requirements": ["CF-M1-010"],
+    "status": "implementation_local_isolation_and_human_visual_acceptance_complete; remote_ci_and_real_smtp_pending",
+    "deadline": "startAt_plus_15_minutes_by_server_clock",
+    "transition": "CONFIRMED_to_NO_SHOW_under_shared_user_and_room_locks",
+    "atomic_facts": ["reservation_state_and_version", "transition", "one_violation", "unique_no_show_outbox"],
+    "occupancy_release": "NO_SHOW_is_not_an_active_personal_occupancy; other_sources_are_not_deleted",
+    "race": "check_in_before_deadline_can_win; at_or_after_deadline establishes_NO_SHOW_and_rejects_late_check_in",
+    "automatic_completion": "CHECKED_IN_to_COMPLETED_at_endAt",
+    "history": "single_aggregate_read_returns_checkedInAt_completedAt_usageDurationSeconds_violationReason_and_serverTime",
+    "frontend": "text_icon_and_color_status; green_checked_in_or_completed; red_no_show",
+    "test_accelerator": "test_classpath_only makeNoShowDue; absent_from_production_jar",
+    "local_results": {"seats": 195, "web": 63, "typescript": "passed", "production_build": "passed", "isolated_no_show": "passed"},
+    "human_acceptance": "user_confirmed_red_violation_history_effect_on_2026-10-31",
+    "real_provider_tested": false,
+    "d_owner_reviewed": false,
+    "remote_ci": "not_run",
+    "committed": false,
+    "record": "docs/process/m1-no-show-validation.md"
+  },
   "personal_runtime_stage": {
     "status": "implemented_and_locally_validated; human_script_and_specified_ui_accepted",
     "authorization": {
@@ -759,7 +779,7 @@
     "remaining": [
       "M2/M3 occupancy/source integration and real cross-module review",
       "D in-flight disable race and midnight contract",
-      "CF-M1-010 no-show/violation and CF-M1-011 operations",
+      "CF-M1-011 operations; CF-M1-010 was implemented after this personal-runtime stage",
       "real SMTP provider acceptance and D V4 owner review",
       "whole-group CI/release/rollback coordination"
     ],

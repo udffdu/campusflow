@@ -1,6 +1,6 @@
 {
   "register_status": "partial_draft",
-  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/006/012部分实现，CF-M1-007当前页面流程已由用户确认。CF-M1-008/009代码、本地模拟邮件、站内信和前端弹窗已实现，真实SMTP、最新完整隔离重跑与D负责人评审仍待完成；CF-M1-010/011与M2/M3集成未完成。M1-B和D扩展的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
+  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/006/012部分实现，CF-M1-007当前页面流程已由用户确认。CF-M1-008/009代码、本地模拟邮件、站内信和前端弹窗已实现；CF-M1-010代码、隔离验证路径和红色违约历史已实现并由用户人工确认。真实SMTP、D负责人评审、CF-M1-011与M2/M3集成仍待完成。M1-B和D扩展的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
   "requirements": [
     {
       "id": "CF-M2-001",
@@ -501,9 +501,9 @@
       "responsibility": "B",
       "acceptance": [
         "Web端可使用每天更新且与教室关联的编码签到；编码不能用于错误教室或错误日期",
-        "当前阶段只允许本人CONFIRMED预约使用正确当日教室码签到，不限制签到时间；重复请求不重复写入",
+        "只允许本人CONFIRMED预约在开始后15分钟截止点前使用正确当日教室码签到；重复请求不重复写入",
         "正确码进入使用状态页并按服务端时刻计时，错误码允许重新输入；主动退座将CHECKED_IN原子更新为COMPLETED且重复退座幂等",
-        "最终签到窗口及签到与超时并发边界在CF-M1-010实现前由用户决定并记录，A完成后向B交接"
+        "CF-M1-010已确定开始后15分钟截止并实现锁内竞态：截止前签到可成功，到点仍未签到则转NO_SHOW且不能复活"
       ],
       "implementation": [
         "services/seats/src/main/java/io/campusflow/seats/DailyCheckInCode.java",
@@ -602,15 +602,36 @@
       "module": "M1",
       "title": "未签到自动取消释放及违约",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "responsibility": "B",
       "acceptance": [
         "开始后15分钟仍未签到按已评审边界自动取消、释放对应个人占用、提醒并记录一次违约",
         "重复执行或重启不重复记违约，状态变更与释放/违约保持原子性，签到竞态仅保留合法结果",
         "用户已确认系统原因终止状态免记学生违约；维修触发及M3调用契约仍待受影响方评审，解除个人占用不得删除其他来源限制"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/seats/src/main/resources/db/migration/V4__no_show_lifecycle.sql",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationLifecycleStore.java",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationLifecycleWorker.java",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationStore.java",
+        "services/seats/src/main/java/io/campusflow/seats/ReminderStore.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationLifecycleConfiguration.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationReadController.java",
+        "apps/web/src/views/MyReservationsView.vue",
+        "contracts/m1-check-in-api.md",
+        "contracts/m1-history-api.md"
+      ],
+      "verification": [
+        "services/seats/src/test/java/io/campusflow/seats/ReservationLifecycleStoreTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/ReservationCheckInStoreTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/ReservationStoreTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
+        "apps/web/src/components/MyReservationsView.test.ts",
+        "scripts/check_m1_reminders.py",
+        "scripts/check-m1-no-show.sh",
+        "scripts/start-m1-no-show-preview.sh",
+        "docs/process/m1-no-show-validation.md"
+      ]
     },
     {
       "id": "CF-M1-011",
