@@ -23,6 +23,7 @@ public final class QueryErrors {
             switch(p.code()) {
                 case RESERVATION_NOT_FOUND -> {status=404;message="未查询到本人的预约记录";}
                 case CHECK_IN_STATE_CONFLICT -> {status=409;message="当前预约状态不能签到";}
+                case CHECK_IN_TOO_EARLY -> {status=409;message="尚未到签到时间，请在预约开始前 20 分钟后再试";}
                 case CHECK_IN_DEADLINE_PASSED -> {status=409;message="已超过签到截止时间，预约已按未签到取消";}
                 case LEAVE_SEAT_STATE_CONFLICT -> {status=409;message="当前预约未处于使用状态，不能退座";}
                 case CHECK_IN_CODE_INVALID -> {status=422;message="签到码无效，请核对教室和当日编码";}

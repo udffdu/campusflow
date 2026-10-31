@@ -5,6 +5,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.*;
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,13 +32,14 @@ public final class ReservationReadController {
         return wire(store.findForUser(identity.userId(),uuid).orElseThrow(ReservationReadController::missing),stage());
     }
     @GetMapping("/reservations") public Map<String,Object> history(HttpServletRequest request) {
-        for(var e:request.getParameterMap().entrySet())if(!Set.of("size","cursor").contains(e.getKey())||e.getValue().length!=1)throw QueryProblem.invalid();
+        for(var e:request.getParameterMap().entrySet())if(!Set.of("size","cursor","status","from","to").contains(e.getKey())||e.getValue().length!=1)throw QueryProblem.invalid();
         String raw=request.getParameter("size");int size=20;
         if(raw!=null){if(!raw.matches("[1-9][0-9]?"))throw QueryProblem.invalid();size=Integer.parseInt(raw);if(size>50)throw QueryProblem.invalid();}
         var identity=d.call().identity(QueryController.session(request),ReservationAccessPolicy.Action.READ_OWN);
-        var page=store.detailedHistoryForUser(identity.userId(),position(request.getParameter("cursor"),identity.userId()),size);
+        var filter=historyFilter(request);String fingerprint=filterFingerprint(identity.userId(),filter);
+        var page=store.detailedHistoryForUser(identity.userId(),filter,position(request.getParameter("cursor"),fingerprint),size);
         String next=page.next()==null?"":Base64.getUrlEncoder().withoutPadding().encodeToString(
-                (identity.userId()+"|"+page.next().createdAt()+"|"+page.next().id()).getBytes(StandardCharsets.UTF_8));
+                (fingerprint+"|"+page.next().createdAt()+"|"+page.next().id()).getBytes(StandardCharsets.UTF_8));
         return Map.of("items",page.items().stream().map(r->historyWire(r,stage())).toList(),"size",size,
                 "nextCursor",next,"serverTime",page.serverTime());
     }
@@ -53,14 +56,34 @@ public final class ReservationReadController {
         return Map.of("reservationId",original.id(),"room",Map.of("id",room.id(),"code",room.code(),"name",room.name(),"bookingScope",room.scope(),"openingHours",room.hours()),
                 "seat",Map.of("id",seat.id(),"code",seat.code()),"requiresNewTime",true,"canReserve",false);
     }
-    private static ReservationStore.HistoryPosition position(String cursor,UUID userId) {
+    private static ReservationStore.HistoryFilter historyFilter(HttpServletRequest request) {
+        try {
+            String rawStatus=request.getParameter("status"),rawFrom=request.getParameter("from"),rawTo=request.getParameter("to");
+            ReservationStatus status=rawStatus==null?null:ReservationStatus.valueOf(rawStatus);
+            if((rawFrom==null)!=(rawTo==null))throw QueryProblem.invalid();
+            Instant from=rawFrom==null?null:strictInstant(rawFrom),to=rawTo==null?null:strictInstant(rawTo);
+            return new ReservationStore.HistoryFilter(status,from,to);
+        } catch (IllegalArgumentException|java.time.DateTimeException e) { throw QueryProblem.invalid(); }
+    }
+    private static Instant strictInstant(String value) {
+        if(value==null||!value.endsWith("Z"))throw QueryProblem.invalid();
+        Instant instant=Instant.parse(value);
+        if(instant.isBefore(Instant.parse("0001-01-01T00:00:00Z"))||instant.isAfter(Instant.parse("9999-12-31T23:59:59Z")))throw QueryProblem.invalid();
+        return instant;
+    }
+    private static String filterFingerprint(UUID userId,ReservationStore.HistoryFilter filter) {
+        String canonical=userId+"|"+(filter.status()==null?"":filter.status().name())+"|"+
+                (filter.from()==null?"":filter.from())+"|"+(filter.to()==null?"":filter.to());
+        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8))); }
+        catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+    }
+    private static ReservationStore.HistoryPosition position(String cursor,String fingerprint) {
         if(cursor==null)return null;
         try{
             if(!cursor.matches("[A-Za-z0-9_-]{1,200}"))throw QueryProblem.invalid();
             String[] parts=new String(Base64.getUrlDecoder().decode(cursor),StandardCharsets.UTF_8).split("\\|",-1);
-            if(parts.length!=3||!uuid(parts[0]).equals(userId))throw QueryProblem.invalid();
-            Instant instant=Instant.parse(parts[1]);
-            if(!parts[1].endsWith("Z")||instant.isBefore(Instant.parse("0001-01-01T00:00:00Z"))||instant.isAfter(Instant.parse("9999-12-31T23:59:59Z")))throw QueryProblem.invalid();
+            if(parts.length!=3||!MessageDigest.isEqual(parts[0].getBytes(StandardCharsets.US_ASCII),fingerprint.getBytes(StandardCharsets.US_ASCII)))throw QueryProblem.invalid();
+            Instant instant=strictInstant(parts[1]);
             return new ReservationStore.HistoryPosition(instant,uuid(parts[2]));
         }catch(IllegalArgumentException|java.time.DateTimeException e){throw QueryProblem.invalid();}
     }

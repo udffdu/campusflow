@@ -160,6 +160,9 @@ public final class ReservationStore {
                     return CheckInAttempt.failed(CheckInException.Code.CHECK_IN_STATE_CONFLICT);
                 }
                 Instant now = clock.instant();
+                if (now.isBefore(current.period().startAt().minus(Duration.ofMinutes(20)))) {
+                    return CheckInAttempt.failed(CheckInException.Code.CHECK_IN_TOO_EARLY);
+                }
                 if (!now.isBefore(current.period().startAt().plus(Duration.ofMinutes(15)))) {
                     transitionNoShow(current, now);
                     return CheckInAttempt.failed(CheckInException.Code.CHECK_IN_DEADLINE_PASSED);
@@ -457,6 +460,15 @@ public final class ReservationStore {
     public record HistoryEntry(ReservationRecord reservation, Instant checkedInAt, Instant completedAt,
                                long usageDurationSeconds, String violationReason) {}
     public record DetailedOwnHistory(List<HistoryEntry> items, HistoryPosition next, Instant serverTime) {}
+    public record HistoryFilter(ReservationStatus status, Instant from, Instant to) {
+        public HistoryFilter {
+            if ((from == null) != (to == null)) throw new IllegalArgumentException("History date range must be complete");
+            if (from != null && (!from.isBefore(to) || Duration.between(from,to).compareTo(Duration.ofDays(366)) > 0)) {
+                throw new IllegalArgumentException("History date range must be between 1 second and 366 days");
+            }
+        }
+        public static HistoryFilter none() { return new HistoryFilter(null,null,null); }
+    }
 
     /** Keyset pagination over the authenticated user's rows, including every lifecycle state. Never writes. */
     public OwnHistory historyForUser(UUID userId, HistoryPosition before, int size) {
@@ -475,10 +487,19 @@ public final class ReservationStore {
 
     /** One-snapshot history read; lifecycle details are aggregated in SQL to avoid per-row follow-up calls. */
     public DetailedOwnHistory detailedHistoryForUser(UUID userId, HistoryPosition before, int size) {
+        return detailedHistoryForUser(userId,HistoryFilter.none(),before,size);
+    }
+
+    /** Filtered history remains a server-side, owner-scoped keyset query; dates apply to reservation start time. */
+    public DetailedOwnHistory detailedHistoryForUser(UUID userId, HistoryFilter filter, HistoryPosition before, int size) {
         Objects.requireNonNull(userId);
+        Objects.requireNonNull(filter);
         if(size<1||size>50)throw new IllegalArgumentException("History size must be 1..50");
         Instant serverTime=clock.instant();
         var args=new java.util.ArrayList<Object>();args.add(userId);
+        String predicates="";
+        if(filter.status()!=null){predicates+=" and r.status=?";args.add(filter.status().name());}
+        if(filter.from()!=null){predicates+=" and r.start_at>=? and r.start_at<?";args.add(Timestamp.from(filter.from()));args.add(Timestamp.from(filter.to()));}
         String boundary="";
         if(before!=null){boundary=" and (r.created_at,r.id) < (?,?)";args.add(Timestamp.from(before.createdAt()));args.add(before.id());}
         args.add(size+1);
@@ -491,7 +512,8 @@ public final class ReservationStore {
                 left join m1.reservation_transitions t on t.reservation_id=r.id
                 left join m1.reservation_violations v on v.reservation_id=r.id
                 where r.user_id=?
-                """+boundary+"""
+                """+predicates+boundary+"""
+
                 group by r.id order by r.created_at desc,r.id desc limit ?
                 """,(row,index)->{
                     ReservationRecord reservation=map(row,index);
