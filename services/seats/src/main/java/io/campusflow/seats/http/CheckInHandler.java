@@ -65,7 +65,7 @@ public final class CheckInHandler {
             var latest = call.identity(session, ReservationAccessPolicy.Action.CHECK_IN);
             if (!latest.userId().equals(identity.userId())) throw QueryProblem.upstream();
         });
-        var response = new LinkedHashMap<>(ReservationReadController.wire(result.reservation(), access.stage()));
+        var response = new LinkedHashMap<>(usageWire(store.usageForUser(identity.userId(), reservationId), null));
         response.put("idempotent", result.idempotent());
         return ServerResponse.ok().body(response);
     }

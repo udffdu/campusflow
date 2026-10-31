@@ -26,6 +26,7 @@ public final class ReminderWorker {
         store.scheduleDue(scanLimit);
         for(var event:store.claimDue(deliveryLimit,lease)){
             try{
+                if(!store.prepareDelivery(event))continue;
                 var call=d.call();
                 var room=call.room(event.roomId());
                 var seat=call.seat(event.seatId());
@@ -41,10 +42,14 @@ public final class ReminderWorker {
                 ?DATE.format(start)+" "+TIME.format(start)+"–"+TIME.format(end)
                 :DATE_TIME.format(start)+" – "+DATE_TIME.format(end);
         boolean early=ReminderStore.START.equals(event.eventType());
-        String title=(early?"预约即将开始｜":"尚未签到｜")+compact(room.code())+" · "+compact(seat.code());
-        String action=early
-                ?"预约将在 15 分钟内开始，请按时到达，并使用教室当日签到码完成签到。"
-                :"预约已开始超过 10 分钟，目前仍未签到。请尽快到达，并使用教室当日签到码完成签到。";
+        boolean noShow=ReminderStore.NO_SHOW.equals(event.eventType());
+        String title=(noShow?"预约已因未签到取消｜":early?"预约即将开始｜":"尚未签到｜")
+                +compact(room.code())+" · "+compact(seat.code());
+        String action=noShow
+                ?"预约开始后 15 分钟内未完成签到，系统已取消预约、释放座位，并记录一次未签到违约。如有异常，请联系管理员核查。"
+                :early
+                    ?"预约将在 15 分钟内开始，请按时到达，并使用教室当日签到码完成签到。"
+                    :"预约已开始超过 10 分钟，目前仍未签到。请尽快到达，并使用教室当日签到码完成签到。";
         String body="教室："+label(room)+"\n座位："+label(seat)+"\n时间："+period+"（上海时间）\n\n"+action;
         return new DQueryClient.ReminderNotification("m1-reminder:"+event.eventId(),event.userId(),title,body,
                 "SEAT_RESERVATION",event.reservationId().toString());

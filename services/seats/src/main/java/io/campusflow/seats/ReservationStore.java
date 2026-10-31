@@ -60,6 +60,7 @@ public final class ReservationStore {
     public record UsageResult(ReservationRecord reservation, boolean idempotent) {}
     public record UsageSession(ReservationRecord reservation, Instant checkedInAt,
                                Instant completedAt, Instant serverTime) {}
+    public enum LifecycleResult { TRANSITIONED, NOT_DUE, NOT_APPLICABLE }
 
     private record CheckInAttempt(ReservationRecord reservation, boolean idempotent, CheckInException.Code error) {
         static CheckInAttempt failed(CheckInException.Code error) { return new CheckInAttempt(null, false, error); }
@@ -159,6 +160,10 @@ public final class ReservationStore {
                     return CheckInAttempt.failed(CheckInException.Code.CHECK_IN_STATE_CONFLICT);
                 }
                 Instant now = clock.instant();
+                if (!now.isBefore(current.period().startAt().plus(Duration.ofMinutes(15)))) {
+                    transitionNoShow(current, now);
+                    return CheckInAttempt.failed(CheckInException.Code.CHECK_IN_DEADLINE_PASSED);
+                }
                 RateLimit limit = rateLimit(userId, reservationId);
                 if (limit != null && limit.blockedUntil() != null && limit.blockedUntil().isAfter(now)) {
                     return CheckInAttempt.failed(CheckInException.Code.CHECK_IN_RATE_LIMITED);
@@ -188,6 +193,7 @@ public final class ReservationStore {
                         Timestamp.from(now));
                 jdbc.update("delete from m1.checkin_rate_limits where user_id=? and reservation_id=?",
                         userId, reservationId);
+                supersedeReminders(reservationId, now);
                 return new CheckInAttempt(findForUser(userId, reservationId).orElseThrow(), false, null);
             });
             if (attempt == null) throw new IllegalStateException("签到事务未返回结果");
@@ -273,6 +279,120 @@ public final class ReservationStore {
         return new UsageSession(reservation, times.checkedInAt(), times.completedAt(), clock.instant());
     }
 
+    /** Background/system transition. Candidate scans are advisory only; this method owns the lock-time decision. */
+    public LifecycleResult markNoShowIfDue(UUID reservationId) {
+        Objects.requireNonNull(reservationId, "reservationId");
+        try {
+            ReservationRecord preliminary = findById(reservationId).orElse(null);
+            if (preliminary == null) return LifecycleResult.NOT_APPLICABLE;
+            LifecycleResult result = transaction.execute(ignored -> {
+                jdbc.queryForObject("select set_config('lock_timeout', ?, true)", String.class,
+                        lockTimeoutMillis + "ms");
+                locks.lockUserAndRoom(preliminary.userId(), preliminary.roomId());
+                ReservationRecord current = findById(reservationId).orElse(null);
+                if (current == null || !current.userId().equals(preliminary.userId())
+                        || !current.roomId().equals(preliminary.roomId())) {
+                    throw new IllegalStateException("预约不可变关联已改变");
+                }
+                if (current.status() != ReservationStatus.CONFIRMED) return LifecycleResult.NOT_APPLICABLE;
+                Instant now = clock.instant();
+                if (now.isBefore(current.period().startAt().plus(Duration.ofMinutes(15)))) {
+                    return LifecycleResult.NOT_DUE;
+                }
+                transitionNoShow(current, now);
+                return LifecycleResult.TRANSITIONED;
+            });
+            return Objects.requireNonNull(result, "未签到事务未返回结果");
+        } catch (DataAccessException exception) {
+            throw persistenceFailure(exception);
+        }
+    }
+
+    /** Idempotently completes a checked-in reservation at its persisted end time. */
+    public LifecycleResult completeIfDue(UUID reservationId) {
+        Objects.requireNonNull(reservationId, "reservationId");
+        try {
+            ReservationRecord preliminary = findById(reservationId).orElse(null);
+            if (preliminary == null) return LifecycleResult.NOT_APPLICABLE;
+            LifecycleResult result = transaction.execute(ignored -> {
+                jdbc.queryForObject("select set_config('lock_timeout', ?, true)", String.class,
+                        lockTimeoutMillis + "ms");
+                locks.lockUserAndRoom(preliminary.userId(), preliminary.roomId());
+                ReservationRecord current = findById(reservationId).orElse(null);
+                if (current == null || !current.userId().equals(preliminary.userId())
+                        || !current.roomId().equals(preliminary.roomId())) {
+                    throw new IllegalStateException("预约不可变关联已改变");
+                }
+                if (current.status() != ReservationStatus.CHECKED_IN) return LifecycleResult.NOT_APPLICABLE;
+                Instant now = clock.instant();
+                if (now.isBefore(current.period().endAt())) return LifecycleResult.NOT_DUE;
+                long nextVersion = current.version() + 1;
+                int changed = jdbc.update("""
+                        update m1.reservations set status='COMPLETED',version=?,updated_at=?
+                        where id=? and status='CHECKED_IN' and version=?
+                        """, nextVersion, Timestamp.from(now), reservationId, current.version());
+                if (changed != 1) throw new IllegalStateException("预约结束状态条件更新失败");
+                jdbc.update("""
+                        insert into m1.reservation_transitions
+                        (transition_id,reservation_id,from_status,to_status,reason,actor_user_id,reservation_version,occurred_at)
+                        values (?,?,'CHECKED_IN','COMPLETED','RESERVATION_END',null,?,?)
+                        """, UUID.randomUUID(), reservationId, nextVersion, Timestamp.from(now));
+                jdbc.update("""
+                        insert into m1.outbox_events(event_id,reservation_id,event_type,payload,created_at)
+                        values (?,?,'RESERVATION_COMPLETED',jsonb_build_object(
+                          'reservationId',cast(? as text),'userId',cast(? as text),'roomId',cast(? as text),
+                          'seatId',cast(? as text),'completedAt',cast(? as text),'reason','RESERVATION_END','version',?),?)
+                        """, UUID.randomUUID(), reservationId, reservationId.toString(), current.userId().toString(),
+                        current.roomId().toString(), current.seatId().toString(), now.toString(), nextVersion,
+                        Timestamp.from(now));
+                return LifecycleResult.TRANSITIONED;
+            });
+            return Objects.requireNonNull(result, "预约结束事务未返回结果");
+        } catch (DataAccessException exception) {
+            throw persistenceFailure(exception);
+        }
+    }
+
+    private void transitionNoShow(ReservationRecord current, Instant now) {
+        long nextVersion = current.version() + 1;
+        int changed = jdbc.update("""
+                update m1.reservations set status='NO_SHOW',version=?,updated_at=?
+                where id=? and status='CONFIRMED' and version=?
+                """, nextVersion, Timestamp.from(now), current.id(), current.version());
+        if (changed != 1) throw new IllegalStateException("未签到状态条件更新失败");
+        jdbc.update("""
+                insert into m1.reservation_transitions
+                (transition_id,reservation_id,from_status,to_status,reason,actor_user_id,reservation_version,occurred_at)
+                values (?,?,'CONFIRMED','NO_SHOW','CHECK_IN_TIMEOUT',null,?,?)
+                """, UUID.randomUUID(), current.id(), nextVersion, Timestamp.from(now));
+        jdbc.update("""
+                insert into m1.reservation_violations
+                (violation_id,reservation_id,user_id,room_id,seat_id,start_at,end_at,reason,recorded_at,reservation_version)
+                values (?,?,?,?,?,?,?,'NO_SHOW',?,?)
+                """, UUID.randomUUID(), current.id(), current.userId(), current.roomId(), current.seatId(),
+                Timestamp.from(current.period().startAt()), Timestamp.from(current.period().endAt()),
+                Timestamp.from(now), nextVersion);
+        jdbc.update("""
+                insert into m1.outbox_events(event_id,reservation_id,event_type,payload,created_at)
+                values (?,?,'RESERVATION_NO_SHOW',jsonb_build_object(
+                  'reservationId',cast(? as text),'userId',cast(? as text),'roomId',cast(? as text),
+                  'seatId',cast(? as text),'startAt',cast(? as text),'endAt',cast(? as text),
+                  'recordedAt',cast(? as text),'reason','NO_SHOW','version',?),?)
+                """, UUID.randomUUID(), current.id(), current.id().toString(), current.userId().toString(),
+                current.roomId().toString(), current.seatId().toString(), current.period().startAt().toString(),
+                current.period().endAt().toString(), now.toString(), nextVersion, Timestamp.from(now));
+        jdbc.update("delete from m1.checkin_rate_limits where reservation_id=?", current.id());
+        supersedeReminders(current.id(), now);
+    }
+
+    private void supersedeReminders(UUID reservationId, Instant now) {
+        jdbc.update("""
+                update m1.outbox_events set status='SUPERSEDED',claimed_until=null,last_error=null,superseded_at=?
+                where reservation_id=? and event_type in ('RESERVATION_START_REMINDER','RESERVATION_LATE_REMINDER')
+                  and status in ('PENDING','DELIVERING')
+                """, Timestamp.from(now), reservationId);
+    }
+
     private RateLimit rateLimit(UUID userId, UUID reservationId) {
         return jdbc.query("""
                 select window_started_at,failures,blocked_until from m1.checkin_rate_limits
@@ -325,10 +445,18 @@ public final class ReservationStore {
                 +"where q.user_id=? and q.idempotency_key=? and r.user_id=?",ReservationStore::map,userId,key,userId).stream().findFirst();
     }
 
+    private Optional<ReservationRecord> findById(UUID reservationId) {
+        return jdbc.query("select * from m1.reservations where id=?", ReservationStore::map,
+                reservationId).stream().findFirst();
+    }
+
     public record HistoryPosition(Instant createdAt, UUID id) {
         public HistoryPosition { Objects.requireNonNull(createdAt); Objects.requireNonNull(id); }
     }
     public record OwnHistory(List<ReservationRecord> items, HistoryPosition next) {}
+    public record HistoryEntry(ReservationRecord reservation, Instant checkedInAt, Instant completedAt,
+                               long usageDurationSeconds, String violationReason) {}
+    public record DetailedOwnHistory(List<HistoryEntry> items, HistoryPosition next, Instant serverTime) {}
 
     /** Keyset pagination over the authenticated user's rows, including every lifecycle state. Never writes. */
     public OwnHistory historyForUser(UUID userId, HistoryPosition before, int size) {
@@ -343,6 +471,40 @@ public final class ReservationStore {
         boolean more=rows.size()>size;var items=List.copyOf(rows.subList(0,Math.min(size,rows.size())));
         var last=items.isEmpty()?null:items.getLast();
         return new OwnHistory(items,more?new HistoryPosition(last.createdAt(),last.id()):null);
+    }
+
+    /** One-snapshot history read; lifecycle details are aggregated in SQL to avoid per-row follow-up calls. */
+    public DetailedOwnHistory detailedHistoryForUser(UUID userId, HistoryPosition before, int size) {
+        Objects.requireNonNull(userId);
+        if(size<1||size>50)throw new IllegalArgumentException("History size must be 1..50");
+        Instant serverTime=clock.instant();
+        var args=new java.util.ArrayList<Object>();args.add(userId);
+        String boundary="";
+        if(before!=null){boundary=" and (r.created_at,r.id) < (?,?)";args.add(Timestamp.from(before.createdAt()));args.add(before.id());}
+        args.add(size+1);
+        var rows=jdbc.query("""
+                select r.*,
+                  max(t.occurred_at) filter (where t.to_status='CHECKED_IN') as checked_in_at,
+                  max(t.occurred_at) filter (where t.to_status='COMPLETED') as completed_at,
+                  max(v.reason) as violation_reason
+                from m1.reservations r
+                left join m1.reservation_transitions t on t.reservation_id=r.id
+                left join m1.reservation_violations v on v.reservation_id=r.id
+                where r.user_id=?
+                """+boundary+"""
+                group by r.id order by r.created_at desc,r.id desc limit ?
+                """,(row,index)->{
+                    ReservationRecord reservation=map(row,index);
+                    Timestamp checked=row.getTimestamp("checked_in_at"),completed=row.getTimestamp("completed_at");
+                    Instant checkedAt=checked==null?null:checked.toInstant();
+                    Instant completedAt=completed==null?null:completed.toInstant();
+                    long seconds=checkedAt==null?0:Math.max(0,Duration.between(checkedAt,
+                            completedAt==null?serverTime:completedAt).getSeconds());
+                    return new HistoryEntry(reservation,checkedAt,completedAt,seconds,row.getString("violation_reason"));
+                },args.toArray());
+        boolean more=rows.size()>size;var items=List.copyOf(rows.subList(0,Math.min(size,rows.size())));
+        var last=items.isEmpty()?null:items.getLast().reservation();
+        return new DetailedOwnHistory(items,more?new HistoryPosition(last.createdAt(),last.id()):null,serverTime);
     }
 
     /**

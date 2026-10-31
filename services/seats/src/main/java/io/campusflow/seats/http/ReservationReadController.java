@@ -34,10 +34,11 @@ public final class ReservationReadController {
         String raw=request.getParameter("size");int size=20;
         if(raw!=null){if(!raw.matches("[1-9][0-9]?"))throw QueryProblem.invalid();size=Integer.parseInt(raw);if(size>50)throw QueryProblem.invalid();}
         var identity=d.call().identity(QueryController.session(request),ReservationAccessPolicy.Action.READ_OWN);
-        var page=store.historyForUser(identity.userId(),position(request.getParameter("cursor"),identity.userId()),size);
+        var page=store.detailedHistoryForUser(identity.userId(),position(request.getParameter("cursor"),identity.userId()),size);
         String next=page.next()==null?"":Base64.getUrlEncoder().withoutPadding().encodeToString(
                 (identity.userId()+"|"+page.next().createdAt()+"|"+page.next().id()).getBytes(StandardCharsets.UTF_8));
-        return Map.of("items",page.items().stream().map(r->wire(r,stage())).toList(),"size",size,"nextCursor",next);
+        return Map.of("items",page.items().stream().map(r->historyWire(r,stage())).toList(),"size",size,
+                "nextCursor",next,"serverTime",page.serverTime());
     }
     @GetMapping("/reservations/{id}/repeat-context") public Map<String,Object> repeat(@PathVariable String id,HttpServletRequest request) {
         noParams(request);UUID uuid=uuid(id);String session=QueryController.session(request);var call=d.call();
@@ -77,5 +78,13 @@ public final class ReservationReadController {
         return Map.of("id",record.id(),"roomId",record.roomId(),"seatId",record.seatId(),"startAt",record.period().startAt(),
                 "endAt",record.period().endAt(),"status",record.status(),"version",record.version(),"resourceVersion",record.resourceVersion(),
                 "stage",stage,"productionReady",false);
+    }
+    private static Map<String,Object> historyWire(ReservationStore.HistoryEntry entry,String stage){
+        var value=new LinkedHashMap<String,Object>(wire(entry.reservation(),stage));
+        value.put("checkedInAt",entry.checkedInAt());
+        value.put("completedAt",entry.completedAt());
+        value.put("usageDurationSeconds",entry.usageDurationSeconds());
+        value.put("violationReason",entry.violationReason());
+        return value;
     }
 }

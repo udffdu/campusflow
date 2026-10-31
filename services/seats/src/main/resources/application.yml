@@ -39,3 +39,8 @@ m1:
     retry-max: ${M1_REMINDER_RETRY_MAX:PT5M}
     scan-limit: ${M1_REMINDER_SCAN_LIMIT:200}
     delivery-limit: ${M1_REMINDER_DELIVERY_LIMIT:25}
+  lifecycle:
+    enabled: ${M1_LIFECYCLE_ENABLED:false}
+    delay: ${M1_LIFECYCLE_DELAY:PT30S}
+    initial-delay: ${M1_LIFECYCLE_INITIAL_DELAY:PT5S}
+    scan-limit: ${M1_LIFECYCLE_SCAN_LIMIT:200}
