@@ -1,6 +1,6 @@
 # 跨模块接口清单（待组内评审）
 
-M1当前已实现[查询](m1-query-api.md)、[普通个人预约/配置](m1-personal-api.md)、[本人历史/再次预约](m1-history-api.md)、[签到生命周期](m1-check-in-api.md)及[CF-M1-008/009提醒](m1-reminder-api.md)。正常jar可显式启用受保护个人写入和后台提醒，默认均关闭；普通预约窗口按用户确认的上海自然日。CF-M1-010已将签到截止确定为预约开始后15分钟，并接入未签到取消、释放、一次违约、通知和自动完成；验证见[专项记录](../docs/process/m1-no-show-validation.md)。旧[隔离演示协议](m1-reservation-demo-api.md)保留供追溯，不表示普通入口仍依赖测试装配。
+M1当前已实现[查询](m1-query-api.md)、[普通个人预约/配置](m1-personal-api.md)、[本人历史/再次预约](m1-history-api.md)、[签到生命周期](m1-check-in-api.md)、[CF-M1-008/009提醒](m1-reminder-api.md)及[CF-M1-011运营查询](m1-operations-api.md)。正常jar可显式启用受保护个人写入和后台提醒，默认均关闭；普通预约窗口按用户确认的上海自然日。CF-M1-010已将签到截止确定为预约开始后15分钟，并接入未签到取消、释放、一次违约、通知和自动完成；验证见[专项记录](../docs/process/m1-no-show-validation.md)。运营查询使用独立权限、院系范围和只读接口，验证见[运营记录](../docs/process/m1-operations-validation.md)。旧[隔离演示协议](m1-reservation-demo-api.md)保留供追溯，不表示普通入口仍依赖测试装配。
 
 M2/M3内部来源接口仍是讨论稿，未实现；D已实现请求与响应以[D API v1](platform-api.md)为准，其他负责人的评审不能从文档存在推定。每模块拥有自己的契约，调用方共同评审变更，禁止共享数据库实体作为接口。总体交付/延期项见[M1-A索引](../docs/handoffs/m1-a-delivery.md)。
 

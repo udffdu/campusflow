@@ -686,6 +686,22 @@
     "committed": false,
     "record": "docs/process/m1-no-show-validation.md"
   },
+  "operations_stage": {
+    "requirements": ["CF-M1-011"],
+    "status": "implementation_local_isolation_and_human_visual_acceptance_complete; remote_ci_d_owner_review_and_production_scale_pending",
+    "permission": "dedicated seats.operations.read; registered_in_D_but_not_auto_granted_to_existing_roles",
+    "scope": "current_authenticated_department_rooms_and_seats_only; out_of_scope_filter_is_403",
+    "query": "read_only_repeatable_read; max_31_days; optional_room_seat_status; filter_bound_opaque_keyset_cursor",
+    "metrics": ["status_distribution", "check_in_rate", "violations", "reserved_duration", "actual_usage", "reservation_period_utilization", "room_and_seat_rankings"],
+    "privacy": "reservation_owner_identity_not_selected_or_returned",
+    "local_results": {"platform_full": "passed", "focused_seats": 71, "web_full_before_uuid_regression": 70, "operations_frontend_after_uuid_fix": 4, "typescript": "passed", "production_build": "passed", "isolated_operations": 7},
+    "human_acceptance": "user_confirmed_operations_dashboard_after_fixed_master_data_uuid_validation_on_2026-10-31",
+    "d_owner_reviewed": false,
+    "remote_ci": "not_run",
+    "committed": false,
+    "contract": "contracts/m1-operations-api.md",
+    "record": "docs/process/m1-operations-validation.md"
+  },
   "personal_runtime_stage": {
     "status": "implemented_and_locally_validated; human_script_and_specified_ui_accepted",
     "authorization": {
@@ -779,7 +795,7 @@
     "remaining": [
       "M2/M3 occupancy/source integration and real cross-module review",
       "D in-flight disable race and midnight contract",
-      "CF-M1-011 operations; CF-M1-010 was implemented after this personal-runtime stage",
+      "CF-M1-010 and CF-M1-011 were implemented after this personal-runtime stage; see their dedicated stage records",
       "real SMTP provider acceptance and D V4 owner review",
       "whole-group CI/release/rollback coordination"
     ],

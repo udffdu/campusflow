@@ -2,7 +2,7 @@
 
 以自习座位预约为核心，连接整教室申请审批与物业报修的课程实践项目。
 
-当前阶段：D 公共层与前端公共外壳已实现；M1-A 个人预约及 M1-B 的 CF-M1-007～010 已进入实现阶段，包括每日教室码、本人签到、使用计时与主动退座、两类提醒，以及开始后 15 分钟未签到自动取消、释放、一次违约和通知。本人预约历史已按状态显示签到时间、服务端使用时长和红/绿状态提示。真实 SMTP 服务商验收、D 负责人评审、运营查询、M2/M3 业务及完整跨模块联调仍未完成；尚未部署华为云。
+当前阶段：D 公共层与前端公共外壳已实现；M1-A 个人预约及 M1-B 的 CF-M1-007～011 已完成本地实现并具备隔离验证入口。M1-B 覆盖每日教室码、本人签到、使用计时与退座、预约提醒、违约终结与通知、可视化历史，以及院系范围内的预约运营统计。真实 SMTP 服务商验收、D 负责人评审、M2/M3 业务及完整跨模块联调仍未完成；尚未部署华为云。
 
 ## 已确认的上下文
 
@@ -85,43 +85,29 @@ M1已有独立只读HTTP与座位查询页，尚不开放预约提交。Java21/N
 
 本人历史/再次预约位于`/my-reservations`，复用原座位后必须重新填写时段并重新验证；普通环境可按上述配置新建，旧演示保持独立。历史接口在同一次服务端快照中返回签到/完成时刻、使用时长和违约原因；页面以文字、图标和颜色共同区分待签到、签到成功/使用中、签到成功/已完成与未签到违约，不能只依赖颜色表达状态。运行`bash scripts/check-m1-history.sh`复验历史基础流程；CF-M1-010 的最新历史展示另见[未签到生命周期验证](docs/process/m1-no-show-validation.md)。旧Java演示需按步骤重启才能加载新接口，临时数据库会清理。详见[历史验证与人工操作](docs/process/m1-history-validation.md)及[接口契约](contracts/m1-history-api.md)。
 
-## M1-B CF-M1-007 每日教室码与签到
+## M1-B 签到、提醒、违约与运营
 
-学生在`/my-reservations`的“待签到”记录中输入 6 位当日教室码签到。签到截止点为预约开始后 15 分钟：截止点前，服务端只允许本人把`CONFIRMED`原子更新为`CHECKED_IN`；到达或超过截止点时，锁内先落为`NO_SHOW`并拒绝迟到签到，终结记录不能复活。正确码会进入`/seat-usage/:reservationId`使用状态页，由服务端签到时刻驱动计时；学生二次确认退座后原子更新为`COMPLETED`并停止计时，到预约结束仍在使用的记录也由生命周期任务自动完成。错误码清空后可重新输入，数据库错误次数限制仍保留。空间管理员从“空间资源”的启用教室详情打开`/room-checkin-display/:roomId`，可查看按上海日期轮换的教室码和倒计时。CF-M1-011仍未实现。
+M1-B 的 CF-M1-007～011 已形成完整本地流程：学生使用每日教室码签到，进入按服务端时间计时的使用状态并可主动退座；系统在预约开始前 15 分钟和开始后 10 分钟仍未签到时生成站内信与邮件提醒；开始后 15 分钟仍未签到的预约原子转为`NO_SHOW`，释放个人座位占用、记录一次违约并保留可视化历史；授权运营人员可按时间、教室、座位和状态查看本院系预约，读取签到率、违约数、实际利用率及资源排行。状态转换沿用统一用户/教室事务锁，提醒和违约事实可去重，运营接口只读且不返回学生身份。
 
-普通入口额外要求独立的`M1_CHECKIN_SECRET`。复验继续使用`bash scripts/check-m1-personal.sh`；人工页面验收使用`bash scripts/start-m1-personal-preview.sh`。详见[签到/使用状态API契约](contracts/m1-check-in-api.md)和[验证记录](docs/process/m1-check-in-validation.md)。历史自动化结果不代表最新调整、远程CI、提交或部署已经通过。
+运营读取使用独立的`seats.operations.read`权限，不会自动授予既有管理员或普通用户；授权范围来自有效 D 会话和院系资源，越范围请求失败关闭。M1 只通过 D 的公开契约获取身份、资源和通知能力，不读取 D 业务表。M2 整室占用与 M3 维修来源仍未接入，真实 SMTP 服务商送达、D 负责人评审、远程 CI 和部署也不在当前本地验收结论内。
 
-签到人工预览必须使用`start-m1-personal-preview.sh`及其`http://[::1]:5374`地址；`run-local-demo.sh`只启动D公共层，单独配合5173前端不会启动M1。预览会创建`student`与`manager`，并为`student`准备一条A101预约，便于完成“管理员取码—学生签到—计时—退座”检查。
-
-**不同身份必须使用不同浏览器环境。** `manager`与`student`不能只在同一浏览器配置下打开两个标签页，因为同源标签页共享`CF_SESSION` Cookie，后登录的账号会替换前一个账号。需要同时查看两个身份时，请使用两个不同浏览器（例如 Edge 与 Chrome），或一个普通窗口和一个 InPrivate/无痕窗口；也可以在同一窗口退出`manager`后再登录`student`顺序验收。
-
-## M1-B CF-M1-008 / 009 预约提醒
-
-M1 后台按服务端时钟生成两类唯一业务事件：预约开始前 15 分钟提醒，以及开始后 10 分钟仍为`CONFIRMED`的未签到提醒。每条消息包含教室、座位、上海时区完整时间和操作提示。D 分别持久化站内信与邮件任务；前端每 3 秒轮询新站内信并显示约 10 秒的临时弹窗，首次加载不会把历史消息全部弹出。弹窗不是 WebSocket，最终记录和已读状态以`/notifications`为准。
-
-本地自动化与人工预览：
+在仓库根目录依次执行以下隔离检查，可覆盖整个 M1-B。各脚本使用独立临时数据库和测试数据，不修改正常开发数据库；`tmp/`不应提交：
 
 ```sh
+bash scripts/check-m1-personal.sh
 bash scripts/check-m1-reminders.sh
-bash scripts/start-m1-reminder-preview.sh
-# 人工新建每一笔预约后，立即生成两类测试提醒：
-bash scripts/start-m1-instant-reminder-preview.sh
-```
-
-默认使用本地模拟 SMTP，邮箱页面为`http://127.0.0.1:8025`。即时脚本只通过测试 classpath 绕过调度等待，不改预约时间、不进入生产 jar，不能替代正式 15/10 分钟条件的验收。真实邮箱使用`bash scripts/start-m1-reminder-preview.sh --real-mail`，并通过环境变量提供`CF_REMINDER_EMAIL`、`PLATFORM_MAIL_ENABLED=true`、`PLATFORM_SMTP_HOST`、`PLATFORM_SMTP_PORT`、`PLATFORM_MAIL_FROM`及服务商要求的认证参数；不得把真实授权码写进仓库。完整语义见[提醒契约](contracts/m1-reminder-api.md)与[提醒验证记录](docs/process/m1-reminder-validation.md)。
-
-## M1-B CF-M1-010 未签到取消、释放与违约
-
-生命周期任务按服务端时钟扫描开始后已满 15 分钟且仍为`CONFIRMED`的预约。处理时复用用户/教室事务锁并锁内重读，在同一事务中更新为`NO_SHOW`、写转换、记录一次违约并创建唯一通知事实；`NO_SHOW`不再参与个人座位占用，所以座位立即可重新预约。重复扫描、重启恢复和签到竞争只保留一个合法终态，不重复记违约或通知。通知继续通过既有 D 站内信与邮件链路投递，模拟 SMTP 不代表真实外部邮件已验收。
-
-自动检查与人工页面预览：
-
-```sh
 bash scripts/check-m1-no-show.sh
-bash scripts/start-m1-no-show-preview.sh
+bash scripts/check-m1-operations.sh
 ```
 
-人工预览会在本次隔离数据库中先创建一条示例预约，再仅通过测试夹具把它的时间推进到截止点之后；登录`student`并打开脚本给出的`/my-reservations`即可直接看到红色“未签到违约”。脚本还会持续监听后续手工创建的预约并逐笔推进。测试夹具位于测试 classpath，不进入生产 jar，也不改变正式 15 分钟规则。页面显示、模拟邮箱、通知与座位释放的验收步骤见[CF-M1-010 验证记录](docs/process/m1-no-show-validation.md)。
+人工页面验收和单项测试细节请查阅对应文档：
+
+- CF-M1-007：[签到与使用状态验证](docs/process/m1-check-in-validation.md)；
+- CF-M1-008/009：[预约提醒验证](docs/process/m1-reminder-validation.md)；
+- CF-M1-010：[违约生命周期验证](docs/process/m1-no-show-validation.md)；
+- CF-M1-011：[预约运营验证](docs/process/m1-operations-validation.md)。
+
+涉及`manager`、`student`、`operator`等不同身份时，必须使用不同浏览器、不同浏览器配置，或普通窗口与无痕窗口；同源标签页共享`CF_SESSION` Cookie，后登录的账号会替换前一个账号。API、权限、统计口径和环境配置分别见[签到契约](contracts/m1-check-in-api.md)、[提醒契约](contracts/m1-reminder-api.md)与[运营查询契约](contracts/m1-operations-api.md)。
 
 ## 关键文档
 
@@ -130,10 +116,7 @@ bash scripts/start-m1-no-show-preview.sh
 - [架构决策：单仓库与服务边界](docs/architecture/adr-0001-repository-and-services.md)
 - [M2 需求与待决规则](docs/requirements/m2.md)
 - [M1 需求评审稿](docs/requirements/m1.md) · [并发方案 B](docs/architecture/adr-0003-m1-concurrency.md) · [评审包](docs/process/m1-review.md)
-- [M1 核心规则与验证](docs/process/m1-core-validation.md) · [M1-B 接入说明书](docs/handoffs/m1-b.md)（随 A 实现更新，A 完成后交接）
-- [CF-M1-007 签到契约](contracts/m1-check-in-api.md) · [签到验证记录](docs/process/m1-check-in-validation.md)
-- [CF-M1-008/009 提醒契约](contracts/m1-reminder-api.md) · [提醒验证记录](docs/process/m1-reminder-validation.md)
-- [CF-M1-010 未签到生命周期验证](docs/process/m1-no-show-validation.md)
+- [M1 核心规则与验证](docs/process/m1-core-validation.md) · [M1-B 实现范围与协作边界](docs/requirements/m1-b.md) · [M1-B 接入说明书](docs/handoffs/m1-b.md)
 - [M1 内部座位查询方案](docs/architecture/m1-availability-plan.md) · [80测试与查询复验](docs/process/m1-availability-validation.md)（完整D/M2/M3集成仍待进行）
 - [D三项补充实际验证](docs/process/m1-d-supplement-validation.md) · [D/M1-B/M2/M3负责人说明书](docs/handoffs/m1-integration.md)（M1 86及前端11已有用户复验，D24由同次本地报告补证；未部署）
 - [D 实现范围](docs/requirements/d.md) · [D 接口契约](contracts/platform-api.md)

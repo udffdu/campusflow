@@ -45,5 +45,6 @@ bash scripts/start-m1-no-show-preview.sh
 - 真实SMTP服务商端到端到达、退信和运维验收；
 - D负责人对既有邮件扩展的评审；
 - M2整室占用、M3维修限制及`DISRUPTED`跨模块触发契约；
-- CF-M1-011运营查询与统计；
 - 远程CI、PR、部署和生产规模性能验证。
+
+CF-M1-011运营查询与统计已另行实现并由用户人工确认，接口与证据见[预约运营验证](m1-operations-validation.md)。

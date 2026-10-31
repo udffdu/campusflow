@@ -1,20 +1,38 @@
 {
   "register_status": "partial_draft",
-  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/006/012部分实现，CF-M1-007当前页面流程已由用户确认。CF-M1-008/009代码、本地模拟邮件、站内信和前端弹窗已实现；CF-M1-010代码、隔离验证路径和红色违约历史已实现并由用户人工确认。真实SMTP、D负责人评审、CF-M1-011与M2/M3集成仍待完成。M1-B和D扩展的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
+  "coverage_note": "已登记M1需求和用户决策；CF-M1-001/002/003/004/006/012部分实现，CF-M1-007当前页面流程已由用户确认。CF-M1-008/009代码、本地模拟邮件、站内信和前端弹窗已实现；CF-M1-010代码、隔离验证路径和红色违约历史已实现并由用户人工确认；CF-M1-011院系范围运营查询、统计看板和隔离验证已实现并由用户人工确认。真实SMTP、D负责人评审与M2/M3集成仍待完成。M1-B和D扩展的负责人交接按用户要求后续进行，不推定其他成员同意。原M2/D、集成和工程条目保持，M3全量需求待补充；未宣称全组基线冻结。",
   "requirements": [
     {
       "id": "CF-M2-001",
       "module": "M2",
       "title": "申请资格与提交",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "acceptance": [
         "有资格用户可为指定教室和时段提交申请并查询本人记录",
         "无资格或越范围的提交被拒绝",
         "无效时间和不存在或停用的教室被拒绝"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/platform/src/main/resources/db/migration/V5__seat_operations_permission.sql",
+        "services/seats/src/main/resources/db/migration/V5__reservation_operations.sql",
+        "services/seats/src/main/java/io/campusflow/seats/ReservationOperationsStore.java",
+        "services/seats/src/main/java/io/campusflow/seats/http/ReservationOperationsController.java",
+        "apps/web/src/operations.ts",
+        "apps/web/src/views/OperationsDashboardView.vue",
+        "contracts/m1-operations-api.md"
+      ],
+      "verification": [
+        "services/platform/src/test/java/io/campusflow/platform/PlatformIntegrationTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/ReservationOperationsStoreTest.java",
+        "services/seats/src/test/java/io/campusflow/seats/http/QueryHttpTest.java",
+        "apps/web/src/operations.test.ts",
+        "apps/web/src/components/OperationsDashboardView.test.ts",
+        "scripts/check-m1-operations.sh",
+        "scripts/check_m1_operations.py",
+        "scripts/start-m1-operations-preview.sh",
+        "docs/process/m1-operations-validation.md"
+      ]
     },
     {
       "id": "CF-M2-002",

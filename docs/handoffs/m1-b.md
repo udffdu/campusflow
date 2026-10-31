@@ -1,16 +1,18 @@
 # M1-B 接入说明书
 
-更新：2026-10-31。版本：阶段交接稿，尚未向B发送。CF-M1-007～010 已进入实现阶段；用户已确认签到、模拟提醒和红色违约历史页面。真实SMTP、D负责人评审、M1-A跨模块来源接入及CF-M1-011仍待后续。
+当前稳定的职责、实现逻辑和跨模块边界见[M1-B实现范围](../requirements/m1-b.md)；本文继续保存阶段演进、历史决策和交接证据。
+
+更新：2026-10-31。版本：阶段交接稿，尚未向B发送。CF-M1-007～011 已完成本地实现；用户已确认签到、模拟提醒、红色违约历史和运营看板页面。真实SMTP、D负责人评审及M1-A跨模块来源接入仍待后续。
 
 ## 当前接入摘要（优先于下文历史阶段描述）
 
 入口见[交付索引](m1-a-delivery.md)和[续做手册](m1-a-resume.md)。普通jar可按显式安全配置开放个人写入，默认关闭；当前窗口为上海自然日的今天/明天内开始，单次默认最多4小时。查询、创建/恢复、本人历史/复用已实现并验收，契约见[查询](../../contracts/m1-query-api.md)、[普通预约](../../contracts/m1-personal-api.md)、[历史](../../contracts/m1-history-api.md)。
 
-B现已在 M1 自有 V2 迁移和 `ReservationStore.checkIn` 中实现本人签到：按既有用户/教室锁顺序，锁内重读并再次在线授权，使用状态/版本条件将 `CONFIRMED` 原子更新为 `CHECKED_IN`，同时写转换和唯一 outbox 事实。每日码、展示页、CSRF/Origin、数据库限流、Web 输入、服务端计时使用页和 `ReservationStore.leaveSeat` 主动退座均已实现；退座把 `CHECKED_IN` 原子更新为 `COMPLETED`。CF-M1-008/009 又增加 V3 提醒 outbox 租约、15/10 分钟调度、D资源补全、站内信/邮件双通道和前端弹窗。CF-M1-010 增加 V4 违约表/索引、15分钟生命周期任务、原子NO_SHOW、自动完成、通知和可视化历史。契约与证据见[签到API](../../contracts/m1-check-in-api.md)、[提醒API](../../contracts/m1-reminder-api.md)、[提醒验证](../process/m1-reminder-validation.md)及[未签到验证](../process/m1-no-show-validation.md)。运营查询尚未实现；M2/M3来源仍未接入。
+B现已在 M1 自有 V2 迁移和 `ReservationStore.checkIn` 中实现本人签到：按既有用户/教室锁顺序，锁内重读并再次在线授权，使用状态/版本条件将 `CONFIRMED` 原子更新为 `CHECKED_IN`，同时写转换和唯一 outbox 事实。每日码、展示页、CSRF/Origin、数据库限流、Web 输入、服务端计时使用页和 `ReservationStore.leaveSeat` 主动退座均已实现；退座把 `CHECKED_IN` 原子更新为 `COMPLETED`。CF-M1-008/009 增加 V3 提醒 outbox 租约、15/10 分钟调度、D资源补全、站内信/邮件双通道和前端弹窗；CF-M1-010 增加 V4 违约表/索引、15分钟生命周期任务、原子NO_SHOW、自动完成、通知和可视化历史；CF-M1-011 增加 M1 V5 查询索引、D V5 独立运营权限、院系范围只读统计与运营看板。契约与证据见[签到API](../../contracts/m1-check-in-api.md)、[提醒API](../../contracts/m1-reminder-api.md)、[运营API](../../contracts/m1-operations-api.md)、[提醒验证](../process/m1-reminder-validation.md)、[违约验证](../process/m1-no-show-validation.md)及[运营验证](../process/m1-operations-validation.md)。M2/M3来源仍未接入。
 
 下文第5节和第7～10节保留阶段演进证据；其中早期“签到未实现、HTTP/创建未实现、滚动24小时建议、普通写入关闭”等语句仅代表当时，不覆盖本摘要和第11节。
 
-后续D补充已获用户直接实施授权：三项个人预约权限、ROOM.bookingScope、SEAT的POWER_OUTLET及M1内部规则已实现；用户已提供最新M1 86测试和前端11测试/构建复验成功输出，D24由同次本地报告补证，具体见 [各负责人说明书](m1-integration.md)。此授权不代表B/D本人已同意，也没有预先定义签到/运营权限。下文80和43为各阶段历史证据。
+后续D补充已获用户直接实施授权：三项个人预约权限、ROOM.bookingScope、SEAT的POWER_OUTLET及M1内部规则已实现；用户已提供最新M1 86测试和前端11测试/构建复验成功输出，D24由同次本地报告补证，具体见 [各负责人说明书](m1-integration.md)。CF-M1-011另登记独立`seats.operations.read`且不自动授予既有角色；该实现授权不代表B/D本人已评审同意。下文80和43为各阶段历史证据。
 
 ## 1. 决策来源与使用时机
 
@@ -46,13 +48,13 @@ leafwhisper286 已明确承担 M1-A/B 内部共享设计决策，并确认下述
 
 1. 用户身份来自已验证会话，不从请求体信任 userId；业务权限与 D 的接入仍待正式契约确认。
 2. 采用方案 B：个人预约及影响其有效性的操作保护用户和教室；整室/维修变化保护教室。按统一顺序取得数据库事务锁，锁后重读状态；不能自行绕过协调入口直接改有效状态。
-3. 超时取消、释放与违约记录必须同一业务事务，待发通知持久化后异步重试；重复任务不能重复违约。具体方法/表尚未实现，交接前补充真实签名。
+3. 超时取消、释放与违约记录在同一业务事务完成，待发通知持久化后异步重试；重复任务不能重复违约。当前实现与验证入口见第13节，后续接入不得绕过该原子边界。
 4. 签到与超时同时发生时用时间条件、当前状态和版本共同判断，不仅按请求到达顺序决定；合法签到后不能再被超时任务记违约。
 5. M2/M3 与个人占用来源隔离，维修导致的系统终止不得记作学生违约。
 
 ## 5. 当前可用代码与实施状态
 
-当前范围：`services/seats` 内包含五种状态、时间区间、参数化时间校验、真实PostgreSQL预约存储/幂等/事务锁，以及内部开放计算和个人占用查询。服务已具备只读HTTP/D适配，本轮另新增仅隔离环境装配的个人预约提交；仍没有B签到/违约任务。验证见 [核心规则](../process/m1-core-validation.md)、[存储及事务锁](../process/m1-storage-validation.md) 和 [内部查询](../process/m1-availability-validation.md)。
+当前范围：`services/seats` 内包含五种状态、时间区间、参数化时间校验、真实PostgreSQL预约存储/幂等/事务锁、本人签到与生命周期任务、提醒outbox，以及院系范围预约运营查询。普通个人写入口可通过显式安全配置启用；M2/M3外部占用来源仍未接入。验证入口见 [核心规则](../process/m1-core-validation.md)、[存储及事务锁](../process/m1-storage-validation.md)、[签到](../process/m1-check-in-validation.md)、[提醒](../process/m1-reminder-validation.md)、[违约](../process/m1-no-show-validation.md)和[运营](../process/m1-operations-validation.md)。
 
 用户已同意 [座位查询方案](../architecture/m1-availability-plan.md) 的分阶段范围，内部查询已实现。它与完整鉴权及 M2/M3 集成有明确边界；查询不占座，终结个人预约也不自动解除外部来源限制。本批80测试已由AI本地运行通过，用户随后报告2026-10-28T14:20:20+08:00独立复验80测试及BUILD SUCCESS，耗时3.113秒。
 
@@ -152,3 +154,9 @@ D V4 增加规范化唯一用户邮箱和独立邮件任务；邮件默认关闭
 M1 V4新增`reservation_violations`与生命周期扫描索引，生命周期任务只扫描到期候选，权威转换仍由`ReservationStore`在统一用户/教室锁和单事务内执行。`CONFIRMED -> NO_SHOW`同时写状态/版本、转换、一次违约和唯一`RESERVATION_NO_SHOW` outbox；个人占用由有效状态集合自然释放，不删除或修改其他来源事实。重复扫描、重启和并发签到不会重复终结。到点前签到成功则超时无操作；到点及之后的签到先确保NO_SHOW落库再拒绝。`CHECKED_IN`到预约结束自动转`COMPLETED`。
 
 本人历史以一次聚合SQL返回`checkedInAt`、`completedAt`、`usageDurationSeconds`、`violationReason`和同一快照`serverTime`，避免逐条读取。前端用文字、图标和颜色共同显示绿色情况与红色违约；颜色不是唯一信息。`check-m1-no-show.sh`覆盖隔离链路，`start-m1-no-show-preview.sh`只在测试class path推进临时时间并预置一条可见违约，不进入生产jar。用户已确认红色页面效果；最新本地M1 195、Web 63、类型检查与生产构建通过，远程CI/真实SMTP/部署未完成。详见[验证记录](../process/m1-no-show-validation.md)。
+
+## 14. CF-M1-011 预约运营查询与统计（2026-10-31）
+
+D V5登记独立`seats.operations.read`权限且不自动授予既有角色；M1 V5增加按时间、教室和座位查询的索引。运营接口每次通过D在线会话确定院系范围，只读查询与时间段相交的预约，支持教室、座位、状态筛选和绑定筛选条件的不透明游标。响应只包含资源、状态、时间、使用时长及聚合，不返回学生身份；越范围请求返回403，D不可用时返回503。
+
+运营看板展示预约总数、五状态分布、签到率、违约数、预约时长、实际使用时长、预约时段实际利用率及教室/座位排行。`check-m1-operations.sh`覆盖权限、范围、统计、分页、隐私和失败关闭；`start-m1-operations-preview.sh`只在隔离数据库中生成五状态样本。用户已确认修复固定主数据UUID校验后的页面效果。详细口径、限制和本地证据见[运营契约](../../contracts/m1-operations-api.md)与[运营验证记录](../process/m1-operations-validation.md)。D负责人评审、M2/M3统一运营数据源、生产规模性能、远程CI和部署仍未完成。

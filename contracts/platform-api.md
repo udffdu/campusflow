@@ -2,7 +2,7 @@
 
 实现版，待 M1/M2/M3 负责人评审。D 不判断预约空闲，不保存申请或工单状态。
 
-2026-10-28补充：用户授权直接新增M1预约权限、预约开放范围和座位插座标记。2026-10-30 又授权 CF-M1-008/009 所需的用户邮箱、邮件任务及内部邮件端点。负责人说明见 [接入说明书](../docs/handoffs/m1-integration.md)。这些实现不表示D负责人本人已评审，也不扩大到其他未决跨模块政策。
+2026-10-28补充：用户授权直接新增M1预约权限、预约开放范围和座位插座标记。2026-10-30 又授权 CF-M1-008/009 所需的用户邮箱、邮件任务及内部邮件端点；2026-10-31授权CF-M1-011所需的独立运营读取权限。负责人说明见 [接入说明书](../docs/handoffs/m1-integration.md)。这些实现不表示D负责人本人已评审，也不扩大到其他未决跨模块政策。
 
 ## 共同约定
 
@@ -54,8 +54,9 @@ ResourceCreate：`{type,parentId,code,name,departmentId,capacity,features:[],ope
 - SEAT.features中的精确标记POWER_OUTLET表示已确认有插座。非SEAT不接受该保留标记；其他自由文本仍可保留。教室属性和“电源”等历史文本不自动转换或继承，未标记座位不列入“有插座”筛选。
 - 新增权限seats.availability.read、seats.reservations.create、seats.reservations.read.own，分别用于查询、创建本人预约和本人历史。均可授予自定义角色；新增受保护的内置SEAT_USER角色含三项权限。没有为任何已有账号或ADMIN/MEMBER自动赋权，管理员应在用户既有角色上显式附加SEAT_USER或适当自定义角色。
 - 当前M1内部规则要求权限与预约范围同时通过，个人预约对ADMIN不设院系豁免；CAMPUS允许有业务权限的跨院系用户。read-own不等于读取他人历史或B的运营查询权限。D既有authorization的管理员管理范围例外保持原样，调用方仍需执行M1业务范围判断。
+- V5登记`seats.operations.read`供CF-M1-011只读运营查询使用。该权限可授予自定义角色，但不自动加入ADMIN、MEMBER、SEAT_USER或任何已有用户；D只返回当前身份和院系，M1仍必须限制资源范围且不得据权限返回学生身份。
 
-这些字段/权限已实现于本分支，不表示M1 HTTP入口、真实服务间调用或完整预约流程已经实现。V1/V2保持不变，新增迁移为V3__seat_booking_metadata.sql。
+这些字段/权限已实现于本分支，不表示全组评审、远程CI或部署完成。V1/V2保持不变；预约元数据使用V3，邮件扩展使用V4，运营权限使用`V5__seat_operations_permission.sql`。
 
 ## 内部 `/internal/v1`
 
@@ -72,7 +73,7 @@ ResourceCreate：`{type,parentId,code,name,departmentId,capacity,features:[],ope
 | POST `/audit` | AuditEvent → `{id}`；按 source+eventId 去重，载荷不同 409 |
 
 业务服务从浏览器转发的 HttpOnly CF_SESSION Cookie 提取 sessionToken，在服务端调用 authorization；不要求前端读取会话。业务服务不能信任用户自报 actorId。D 不可用时，受保护写入应拒绝。
-当前permission目录包含D原有权限及上述三项座位权限；permission参数仍仅接受`[a-z.]{1,64}`。不要把spaces.write当作预约、审批或派单资格。M2/M3及B的其他业务权限尚未登记，仍需对应方案。
+当前permission目录包含D原有权限、三项个人座位权限及`seats.operations.read`；permission参数仍仅接受`[a-z.]{1,64}`。不要把spaces.write当作预约、运营、审批或派单资格。M2/M3其他业务权限尚未登记，仍需对应方案。
 
 NotificationEvent（虚构示例）：
 
