@@ -10,6 +10,20 @@ export interface ReservationHistoryItem extends OwnReservation {checkedInAt:stri
 export interface UsageSession extends OwnReservation {checkedInAt:string;completedAt:string|null;serverTime:string;idempotent?:boolean}
 export interface Capabilities {stage:string;canCreateDemoReservation:boolean;canCreateReservation?:boolean;uncheckedSources?:string[];advanceMode?:string;advanceDays?:number;durationHours?:number;canReadOwn:boolean;productionReady:false}
 export interface RoomCheckInCode {roomId:string;roomCode:string;roomName:string;code:string;validDate:string;expiresAt:string;timeZone:'Asia/Shanghai'}
+export type ReservationStatus='CONFIRMED'|'CHECKED_IN'|'COMPLETED'|'NO_SHOW'|'DISRUPTED'
+export function shanghaiDateRange(fromDate:string,toDate:string):{from:string;to:string}{
+  const start=dateParts(fromDate),end=dateParts(toDate)
+  const from=Date.UTC(start.year,start.month-1,start.day)-8*60*60*1000
+  const to=Date.UTC(end.year,end.month-1,end.day+1)-8*60*60*1000
+  if(from>=to)throw new Error('结束日期不能早于开始日期')
+  return {from:new Date(from).toISOString(),to:new Date(to).toISOString()}
+}
+function dateParts(value:string){
+  const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(value);if(!match)throw new Error('请选择有效日期')
+  const year=Number(match[1]),month=Number(match[2]),day=Number(match[3]),probe=new Date(Date.UTC(year,month-1,day))
+  if(probe.getUTCFullYear()!==year||probe.getUTCMonth()!==month-1||probe.getUTCDate()!==day)throw new Error('请选择有效日期')
+  return {year,month,day}
+}
 const prefix='campusflow.pending-reservation.'
 export function clearPendingReservations(){for(let i=sessionStorage.length-1;i>=0;i--){const key=sessionStorage.key(i);if(key?.startsWith(prefix))sessionStorage.removeItem(key)}}
 export function pendingFor(userId:string):PendingReservation|undefined {
