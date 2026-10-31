@@ -20,7 +20,7 @@ class ReminderStoreTest {
     @BeforeAll static void database()throws Exception{
         postgres=EmbeddedPostgres.builder().setPort(0).setServerConfig("listen_addresses","127.0.0.1").start();
         source=postgres.getPostgresDatabase();jdbc=new JdbcTemplate(source);
-        assertEquals(4,Flyway.configure().dataSource(source).schemas("m1").defaultSchema("m1").load().migrate().migrationsExecuted);
+        assertEquals(5,Flyway.configure().dataSource(source).schemas("m1").defaultSchema("m1").load().migrate().migrationsExecuted);
     }
     @AfterAll static void close()throws Exception{if(postgres!=null)postgres.close();}
     @BeforeEach void reset(){jdbc.execute("truncate m1.reservation_violations,m1.checkin_rate_limits,m1.reservation_transitions,m1.outbox_events,m1.reservation_requests,m1.reservations");}

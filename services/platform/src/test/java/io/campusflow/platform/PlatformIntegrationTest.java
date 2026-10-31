@@ -267,7 +267,7 @@ class PlatformIntegrationTest {
         assertThatThrownBy(()->db.update("delete from audit_events where id=?",UUID.fromString(id))).isInstanceOf(DataAccessException.class);
     }
     @Test void migrationsCanReplayWithoutChangingAppliedHistory() {
-        assertThat(flyway.info().applied()).hasSize(4);assertThat(flyway.migrate().migrationsExecuted).isZero();
+        assertThat(flyway.info().applied()).hasSize(5);assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
     @Test void customRolesCannotGrantGlobalPrivilegesAndChangesAreImmediate() throws Exception {
         json(post("/api/v1/roles"),new RoleWrite("LIBRARIAN","图书馆空间维护",Set.of("spaces.read","spaces.write")),admin).andExpect(status().isCreated());
@@ -310,6 +310,22 @@ class PlatformIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(true));
         internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.reservations.create"),M1)
                 .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+    }
+
+    @Test void seatOperationsPermissionRequiresAnExplicitCustomRoleAndAppliesImmediately() throws Exception {
+        UUID id=seed("seat-operator",EIE,"MEMBER");Cookie user=login("seat-operator");
+        for(Cookie session:List.of(user,admin)) {
+            internal("/authorization",Map.of("sessionToken",session.getValue(),"permission","seats.operations.read"),M1)
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+        }
+        json(post("/api/v1/roles"),new RoleWrite("SEAT_OPERATOR","座位预约运营",Set.of("seats.operations.read")),admin)
+                .andExpect(status().isCreated());
+        json(put("/api/v1/users/"+id),new UserUpdate("seat-operator",EIE,Set.of("MEMBER","SEAT_OPERATOR"),true),admin)
+                .andExpect(status().isOk());
+        internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.operations.read"),M1)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(true));
+        assertThat(identities.findSession(user.getValue()).orElseThrow().permissions())
+                .contains("seats.operations.read").doesNotContain("spaces.write","users.manage","audit.read");
     }
 
     @Test void roomScopeSurvivesLegacyUpdatesAndIsVisibleThroughInternalApi() throws Exception {
@@ -378,7 +394,7 @@ class PlatformIntegrationTest {
             legacy.update("insert into user_roles values(?,'MEMBER')",user);
             long version=legacy.queryForObject("select version from resources where id=?",Long.class,room);
             var upgraded=Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load();
-            assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(2);
+            assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(3);
             assertThat(upgraded.migrate().migrationsExecuted).isZero();
             assertThat(legacy.queryForObject("select booking_scope from resources where id=?",String.class,room)).isEqualTo("DEPARTMENT");
             assertThat(legacy.queryForObject("select version from resources where id=?",Long.class,room)).isGreaterThan(version);

@@ -90,8 +90,8 @@ class QueryHttpTest {
     private Reply normal(HttpExchange e) {
         String path=e.getRequestURI().getPath();
         if(path.endsWith("authorization")){
-            try {JsonNode input=json.readTree(e.getRequestBody());assertTrue(Set.of("seats.availability.read","seats.reservations.create","seats.reservations.read.own","spaces.write").contains(input.path("permission").asText()));assertEquals(TOKEN,input.path("sessionToken").asText());}catch(Exception ex){throw new RuntimeException(ex);}
-            return new Reply(identity(true,Set.of(DQueryClient.PERMISSION,"seats.reservations.create","seats.reservations.read.own","spaces.write")));
+            try {JsonNode input=json.readTree(e.getRequestBody());assertTrue(Set.of("seats.availability.read","seats.reservations.create","seats.reservations.read.own","spaces.write","seats.operations.read").contains(input.path("permission").asText()));assertEquals(TOKEN,input.path("sessionToken").asText());}catch(Exception ex){throw new RuntimeException(ex);}
+            return new Reply(identity(true,Set.of(DQueryClient.PERMISSION,"seats.reservations.create","seats.reservations.read.own","spaces.write","seats.operations.read")));
         }
         if(path.endsWith(room.toString()))return new Reply(roomResource());
         if(path.endsWith(seat.toString()))return new Reply(seatResource());
@@ -319,6 +319,37 @@ class QueryHttpTest {
         client.call().reminder(new DQueryClient.ReminderNotification("m1-reminder:"+event,user,"提醒","正文","SEAT_RESERVATION",event.toString()));
         assertEquals(List.of("/internal/v1/notifications","/internal/v1/email-notifications"),calls);
         assertEquals(2,seen.size());assertEquals(seen.get(0),seen.get(1));assertEquals(user.toString(),seen.getFirst().path("recipientId").asText());
+    }
+
+    @Test void operationsReadIsDepartmentScopedStableAndContainsNoStudentIdentity()throws Exception{
+        Instant from=Instant.parse("2026-10-01T00:00:00Z"),to=Instant.parse("2026-11-01T00:00:00Z");
+        UUID completed=operation(room,seat,user,from.plusSeconds(3600),from.plusSeconds(7200),"COMPLETED");
+        operation(room,seat,other,from.plusSeconds(10_800),from.plusSeconds(14_400),"NO_SHOW");
+        operation(other,UUID.randomUUID(),UUID.randomUUID(),from.plusSeconds(18_000),from.plusSeconds(21_600),"COMPLETED");
+        String path="/api/m1/v1/operations/reservations?from="+from+"&to="+to+"&size=1";
+        var first=get(path,true);assertEquals(200,first.statusCode(),first.body());var value=body(first);
+        assertEquals(2,value.path("total").asInt());assertEquals(1,value.at("/summary/checkedIn").asInt());assertEquals(1,value.at("/summary/violations").asInt());
+        assertEquals(.5,value.at("/summary/checkInRate").asDouble(),.000001);assertFalse(first.body().contains(user.toString()));assertFalse(first.body().contains(other.toString()));
+        assertFalse(value.path("nextCursor").asText().isBlank());String firstId=value.at("/items/0/id").asText();
+        var second=body(get(path+"&cursor="+value.path("nextCursor").asText(),true));assertNotEquals(firstId,second.at("/items/0/id").asText());assertEquals("",second.path("nextCursor").asText());
+        assertTrue(Set.of(firstId,second.at("/items/0/id").asText()).contains(completed.toString()));
+    }
+
+    @Test void operationsReadRequiresDedicatedPermissionAndRejectsOutOfScopeFilters()throws Exception{
+        Instant from=Instant.parse("2026-10-01T00:00:00Z"),to=Instant.parse("2026-11-01T00:00:00Z");String path="/api/m1/v1/operations/reservations?from="+from+"&to="+to;
+        assertEquals(401,get(path,false).statusCode());
+        responder=e->e.getRequestURI().getPath().endsWith("authorization")?new Reply(identity(false,Set.of("spaces.write"))):normal(e);
+        assertEquals(403,get(path,true).statusCode());
+        responder=this::normal;assertEquals(403,get(path+"&roomId="+other,true).statusCode());
+        assertEquals(400,get(path+"&userId="+user,true).statusCode());
+    }
+
+    private UUID operation(UUID roomId,UUID seatId,UUID owner,Instant start,Instant end,String status){
+        UUID id=UUID.randomUUID();new JdbcTemplate(pg.getPostgresDatabase()).update("""
+                insert into m1.reservations(id,user_id,room_id,seat_id,start_at,end_at,status,source,resource_version,version,created_at,updated_at)
+                values(?,?,?,?,?,?,?,'M1',1,1,?,?)
+                """,id,owner,roomId,seatId,java.sql.Timestamp.from(start),java.sql.Timestamp.from(end),status,
+                java.sql.Timestamp.from(start.minusSeconds(3600)),java.sql.Timestamp.from(start.minusSeconds(3600)));return id;
     }
 
 }

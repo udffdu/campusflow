@@ -6,3 +6,4 @@ it('allows administrators global scope and removes rights when logged out',()=>{
 
 it('lands a seat-only user on query without requiring spaces.read',()=>{session.user!.permissions=['seats.availability.read'];expect(landingPath()).toBe('/seat-query');session.user!.permissions.push('spaces.read');expect(landingPath()).toBe('/')})
 it('lands a read-own-only user on their history',()=>{session.user!.permissions=['seats.reservations.read.own'];expect(landingPath()).toBe('/my-reservations')})
+it('lands an operations-only user on the operations dashboard',()=>{session.user!.permissions=['seats.operations.read'];expect(landingPath()).toBe('/seat-operations')})

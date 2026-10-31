@@ -201,8 +201,8 @@ def seed(base, password, many, student_email=None):
     closed = resource('ROOM', 'A102', building['id'], DEPT, 'DEPARTMENT')
     seats = [resource('SEAT', f'A101-S{i:03d}', room['id'], DEPT,
                       features=['POWER_OUTLET'] if i == (100 if many else 3) else ['电源']) for i in range(101 if many else 4)]
-    resource('SEAT', 'B201-S001', cross['id'], OTHER, features=['POWER_OUTLET'])
-    return admin, identities, dict(room=room, cross=cross, private=private, closed=closed, building=building, seats=seats)
+    cross_seat = resource('SEAT', 'B201-S001', cross['id'], OTHER, features=['POWER_OUTLET'])
+    return admin, identities, dict(room=room, cross=cross, crossSeat=cross_seat, private=private, closed=closed, building=building, seats=seats)
 
 
 def update_resource(admin, resource, **change):
