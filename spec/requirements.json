@@ -7,56 +7,93 @@
       "module": "M2",
       "title": "申请资格与提交",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "implemented",
       "acceptance": [
         "有资格用户可为指定教室和时段提交申请并查询本人记录",
         "无资格或越范围的提交被拒绝",
         "无效时间和不存在或停用的教室被拒绝"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/rooms/src/main",
+        "apps/web/src/views/RoomsView.vue",
+        "contracts/rooms-api.md",
+        "contracts/m2-occupancy-api.md"
+      ],
+      "verification": [
+        "services/rooms/src/test/java/io/campusflow/rooms/RoomsIntegrationTest.java",
+        "apps/web/src/components/RoomsView.test.ts",
+        "docs/process/m2-validation.md"
+      ]
     },
     {
       "id": "CF-M2-002",
       "module": "M2",
       "title": "顺序多级审批",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "implemented",
       "acceptance": [
         "审批按配置节点顺序推进并记录操作者与意见",
         "不能跳级、重复决策或审批自己的申请",
         "审批同时校验权限与资源管理范围"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/rooms/src/main",
+        "apps/web/src/views/RoomsView.vue",
+        "contracts/rooms-api.md",
+        "contracts/m2-occupancy-api.md"
+      ],
+      "verification": [
+        "services/rooms/src/test/java/io/campusflow/rooms/RoomsIntegrationTest.java",
+        "apps/web/src/components/RoomsView.test.ts",
+        "docs/process/m2-validation.md"
+      ]
     },
     {
       "id": "CF-M2-003",
       "module": "M2",
       "title": "申请超时与撤销",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "implemented",
       "acceptance": [
         "达到已记录截止时间的未决申请自动撤销",
         "任务重启和重复执行不造成重复释放",
         "审批、超时与撤销并发时只保留合法结果"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/rooms/src/main",
+        "apps/web/src/views/RoomsView.vue",
+        "contracts/rooms-api.md",
+        "contracts/m2-occupancy-api.md"
+      ],
+      "verification": [
+        "services/rooms/src/test/java/io/campusflow/rooms/RoomsIntegrationTest.java",
+        "apps/web/src/components/RoomsView.test.ts",
+        "docs/process/m2-validation.md"
+      ]
     },
     {
       "id": "CF-M2-004",
       "module": "M2",
       "title": "审批与实际占用协调",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "acceptance": [
         "仅在 M1 确认占用成功后展示已批准",
         "资源冲突不会覆盖个人预约",
         "远程请求超时可查询和恢复，处理中状态对用户可见"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/rooms/src/main",
+        "apps/web/src/views/RoomsView.vue",
+        "contracts/rooms-api.md",
+        "contracts/m2-occupancy-api.md"
+      ],
+      "verification": [
+        "services/rooms/src/test/java/io/campusflow/rooms/RoomsIntegrationTest.java",
+        "apps/web/src/components/RoomsView.test.ts",
+        "docs/process/m2-validation.md"
+      ],
+      "remaining": "M2 调用端及故障恢复已实现；真实 M1 占用接口及跨模块并发验收待 M1 负责人完成。"
     },
     {
       "id": "CF-D-001",
@@ -149,14 +186,20 @@
       "module": "INT",
       "title": "M2 占用与 M1 预约互斥",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "acceptance": [
         "真实网络调用完成审批占用和撤销释放",
         "个人预约与整教室占用并发时不出现双重成功",
         "可查看 M2 申请作为占用来源"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/rooms/src/main",
+        "contracts/m2-occupancy-api.md"
+      ],
+      "verification": [
+        "docs/process/m2-validation.md"
+      ],
+      "remaining": "仅 M2 侧协议夹具验证，未通过真实 M1 跨模块验收。"
     },
     {
       "id": "CF-INT-002",
@@ -178,14 +221,20 @@
       "module": "INT",
       "title": "重复与乱序请求恢复",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "acceptance": [
         "相同操作重复发送不重复生效",
         "旧创建请求不能复活已释放占用",
         "调用成功但响应丢失时可查询恢复"
       ],
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "services/rooms/src/main",
+        "contracts/m2-occupancy-api.md"
+      ],
+      "verification": [
+        "docs/process/m2-validation.md"
+      ],
+      "remaining": "仅 M2 侧协议夹具验证，未通过真实 M1 跨模块验收。"
     },
     {
       "id": "CF-ENG-001",
@@ -264,6 +313,27 @@
         "apps/web/src/api.test.ts",
         "apps/web/src/components/NotificationsView.test.ts",
         "docs/process/d-validation.md"
+      ]
+    },
+    {
+      "id": "CF-M2-005",
+      "module": "M2",
+      "title": "申请审批页面与可靠事件",
+      "baseline_status": "proposed",
+      "status": "implemented",
+      "acceptance": [
+        "按角色与院系展示本人申请、审批待办和恢复入口",
+        "详情保留意见与历史，处理中和释放中不显示为成功",
+        "业务变化与通知审计事件同事务保存，D 故障可重试且重复发送去重"
+      ],
+      "implementation": [
+        "apps/web/src/views/RoomsView.vue",
+        "services/rooms/src/main"
+      ],
+      "verification": [
+        "apps/web/src/components/RoomsView.test.ts",
+        "services/rooms/src/test/java/io/campusflow/rooms/RoomsIntegrationTest.java",
+        "docs/process/m2-validation.md"
       ]
     }
   ]

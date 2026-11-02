@@ -2,7 +2,7 @@
 
 以自习座位预约为核心，连接整教室申请审批与物业报修的课程实践项目。
 
-当前阶段：D 公共层与前端公共外壳已实现，用户于 2026-10-23 确认本版并授权提交推送，跨模块契约仍待组内评审。M1/M2/M3 的业务待对应负责人实现；尚未部署华为云。
+当前阶段：D 公共层与前端公共外壳已实现，用户于 2026-10-23 确认本版并授权提交推送，跨模块契约仍待组内评审。M2 后端与申请审批页面已在本地实现并验证，用户于 2026-11-02 确认并授权提交推送（暂不创建 PR）；真实 M1 占用联调、M3 和华为云部署仍未完成。
 
 ## 已确认的上下文
 
@@ -48,6 +48,8 @@ python3 scripts/check_repository.py
 ```sh
 cd services/platform
 ./mvnw verify
+cd ../rooms
+./mvnw verify
 cd ../../apps/web
 npm ci
 npm test
@@ -61,19 +63,21 @@ npm run build
 需要 Java 21、Node 22.12+，首次运行需下载依赖，Maven 无需预装。隔离演示无需系统 PostgreSQL 或 Docker：
 
 ```sh
-./scripts/run-local-demo.sh
+# D + M2 演示（D 单独演示仍可用 run-local-demo.sh）
+./scripts/run-m2-demo.sh
 # 另开终端：
 cd apps/web
 npm ci
 npm run dev
 ```
 
-脚本会提示为本次演示设置 `admin` 密码，不回显；也可通过 `BOOTSTRAP_ADMIN_PASSWORD` 环境变量注入。打开 [本地工作台](http://127.0.0.1:5173)。演示数据库随进程结束清理，样例数据与正式业务数据分离。持久化开发环境见 [环境说明](infra/README.md)。
+脚本会提示为本次演示设置 `admin`、`applicant`、`reviewer`、`approver` 的临时统一密码，不回显；也可通过 `BOOTSTRAP_ADMIN_PASSWORD` 环境变量注入。打开 [本地工作台](http://127.0.0.1:5173)。演示数据库随进程结束清理，样例数据与正式业务数据分离。M1 默认不模拟，最终占用/释放需真实 M1 回执，页面会如实显示处理中。持久化开发环境见 [环境说明](infra/README.md)。
 
 ## 关键文档
 
 - [架构决策：单仓库与服务边界](docs/architecture/adr-0001-repository-and-services.md)
-- [M2 需求与待决规则](docs/requirements/m2.md)
+- [M2 需求与待决规则](docs/requirements/m2.md) · [M2 API](contracts/rooms-api.md) · [M1 占用契约](contracts/m2-occupancy-api.md)
+- [M2 验证与待验收记录](docs/process/m2-validation.md)
 - [D 实现范围](docs/requirements/d.md) · [D 接口契约](contracts/platform-api.md)
 - [本次验证与验收记录](docs/process/d-validation.md)
 - [风险与工程伦理](docs/requirements/risks-and-ethics.md)

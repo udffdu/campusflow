@@ -9,6 +9,6 @@ export interface Delivery { id: string; source: string; eventId: string; recipie
 export interface Audit { id: string; source: string; actorId: string; actorName: string; departmentId: string|null; action: string; objectType: string; objectId: string; outcome: string; reasonCode: string|null; requestId: string; occurredAt: string }
 export interface Overview { resources: number; rooms: number; seats: number; unread: number; recentResources: Space[] }
 export const spaceTypes: Record<string,string> = { CAMPUS: '校区', BUILDING: '楼栋', ROOM: '教室', SEAT: '座位' }
-export const roleNames: Record<string,string> = { ADMIN: '系统管理员', SPACE_MANAGER: '空间管理员', AUDITOR: '审计员', MEMBER: '普通成员' }
+export const roleNames: Record<string,string> = { ROOM_APPLICANT:'教室申请人', ROOM_REVIEWER:'院系审核员', ROOM_APPROVER:'教室审批员', ADMIN: '系统管理员', SPACE_MANAGER: '空间管理员', AUDITOR: '审计员', MEMBER: '普通成员' }
 export const statusNames: Record<string,string> = { PENDING: '等待投递', RETRY: '等待重试', DELIVERED: '已送达', DEAD: '投递失败' }
 export function dateTime(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) }

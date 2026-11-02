@@ -7,10 +7,12 @@ import UsersView from './views/UsersView.vue'
 import NotificationsView from './views/NotificationsView.vue'
 import DeliveriesView from './views/DeliveriesView.vue'
 import AuditView from './views/AuditView.vue'
+import RoomsView from './views/RoomsView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 export const router = createRouter({ history: createWebHistory(), routes: [
   {path:'/login', component:LoginView, meta:{title:'登录'}},
   {path:'/', component:OverviewView, meta:{title:'工作台'}},
+  {path:'/room-applications',component:RoomsView,meta:{title:'教室申请',permission:'rooms.read'}},
   {path:'/resources', component:ResourcesView, meta:{title:'空间资源',permission:'spaces.read'}},
   {path:'/users', component:UsersView, meta:{title:'账号与权限',permission:'users.manage'}},
   {path:'/notifications', component:NotificationsView, meta:{title:'通知中心'}},

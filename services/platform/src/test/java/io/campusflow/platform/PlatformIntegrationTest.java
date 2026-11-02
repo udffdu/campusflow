@@ -226,7 +226,7 @@ class PlatformIntegrationTest {
         assertThatThrownBy(()->db.update("delete from audit_events where id=?",UUID.fromString(id))).isInstanceOf(DataAccessException.class);
     }
     @Test void migrationsCanReplayWithoutChangingAppliedHistory() {
-        assertThat(flyway.info().applied()).hasSize(2);assertThat(flyway.migrate().migrationsExecuted).isZero();
+        assertThat(flyway.info().applied()).hasSize(3);assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
     @Test void customRolesCannotGrantGlobalPrivilegesAndChangesAreImmediate() throws Exception {
         json(post("/api/v1/roles"),new RoleWrite("LIBRARIAN","图书馆空间维护",Set.of("spaces.read","spaces.write")),admin).andExpect(status().isCreated());
