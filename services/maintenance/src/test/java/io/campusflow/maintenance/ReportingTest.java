@@ -231,10 +231,11 @@ class ReportingTest {
         assertThat(first.path("items").get(0).path("description").asText()).hasSize(120);
         var detail=node(mvc.perform(get(MANAGEMENT+"/"+a).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()));
         Set<String> fields=new HashSet<>();detail.fieldNames().forEachRemaining(fields::add);
-        assertThat(fields).containsExactlyInAnyOrder("id","roomId","faultType","description","status","createdAt","assigneeId","dispatcherId","assignedAt","updatedAt","version");
+        assertThat(fields).containsExactlyInAnyOrder("id","roomId","faultType","description","status","createdAt","assigneeId","dispatcherId","assignedAt","updatedAt","version","history");
         assertThat(detail.path("version").asInt()).isEqualTo(1);
         assertThat(detail.path("description").asText()).hasSize(200);
-        assertThat(detail.toString()).doesNotContain("reporterId","departmentId","actorId","history","password","token");
+        assertThat(detail.toString()).doesNotContain("reporterId","departmentId","password","token");
+        assertThat(detail.path("history").isArray()).isTrue();assertThat(detail.path("history").size()).isZero();
         mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager")).param("status","ASSIGNED")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
         mode="inactive"; // Historical queries do not require the room to remain active.
         mvc.perform(get(MANAGEMENT+"/"+a).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk());
@@ -351,7 +352,7 @@ class ReportingTest {
         try{
             Flyway.configure().dataSource(url,"postgres","").schemas(schema).target("1").load().migrate();
             UUID id=UUID.randomUUID();db.update("insert into "+schema+".work_orders values(?,?,?,?,?,?,?,?,?)",id,A,ROOM,DEP,1,"OTHER","existing repair","PENDING_DISPATCH",java.sql.Timestamp.from(java.time.Instant.now()));
-            var upgraded=Flyway.configure().dataSource(url,"postgres","").schemas(schema).load();assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(1);assertThat(upgraded.migrate().migrationsExecuted).isZero();
+            var upgraded=Flyway.configure().dataSource(url,"postgres","").schemas(schema).load();assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(2);assertThat(upgraded.migrate().migrationsExecuted).isZero();
             assertThat(db.queryForObject("select version from "+schema+".work_orders where id=?",Long.class,id)).isEqualTo(1);assertThat(db.queryForObject("select updated_at=created_at from "+schema+".work_orders where id=?",Boolean.class,id)).isTrue();upgraded.validate();
         }finally{db.execute("drop schema "+schema+" cascade");}
     }
@@ -379,10 +380,78 @@ class ReportingTest {
         mode="revoked";dispatch(id,"dispatcher","chain-dispatch",B,1).andExpect(status().isForbidden());
         assertThat(count("dispatch_results")).isEqualTo(1);
     }
+    @Test void historyMatchesFormatAndActualFacts() throws Exception {
+        var created=node(create("A","history-create",input("broken lamp")));UUID id=UUID.fromString(created.path("id").asText());
+        Set<String> fields=new HashSet<>();created.fieldNames().forEachRemaining(fields::add);
+        assertThat(fields).containsExactlyInAnyOrder("id","reporterId","roomId","departmentId","faultType","description","status","assigneeId","dispatcherId","createdAt","assignedAt","updatedAt","version","history");
+        var before=created.path("history").get(0);Set<String> historyFields=new HashSet<>();before.fieldNames().forEachRemaining(historyFields::add);
+        assertThat(historyFields).containsExactlyInAnyOrder("id","action","actorId","fromStatus","toStatus","assigneeId","remark","occurredAt");
+        assertThat(before.path("action").asText()).isEqualTo("CREATED");assertThat(before.path("fromStatus").isNull()).isTrue();assertThat(before.path("remark").isNull()).isTrue();
+        mode="ineligible";dispatch(id,"dispatcher","history-dispatch",B,1).andExpect(status().isConflict());assertThat(count("work_order_history")).isEqualTo(1);
+        mode="ok";var assigned=node(dispatch(id,"dispatcher","history-dispatch",B,1).andExpect(status().isOk()));
+        dispatch(id,"dispatcher","history-dispatch",B,1).andExpect(status().isOk());
+        var history=node(mvc.perform(get("/api/v1/maintenance/work-orders/"+id+"/history").cookie(new Cookie("CF_SESSION","A"))).andExpect(status().isOk()));
+        assertThat(history.size()).isEqualTo(2);var last=history.get(1);
+        assertThat(last.path("action").asText()).isEqualTo("ASSIGNED");assertThat(last.path("fromStatus").asText()).isEqualTo("PENDING_DISPATCH");assertThat(last.path("toStatus").asText()).isEqualTo("ASSIGNED");assertThat(last.path("actorId").asText()).isEqualTo(A.toString());assertThat(last.path("assigneeId").asText()).isEqualTo(B.toString());
+        assertThat(java.time.Instant.parse(last.path("occurredAt").asText())).isEqualTo(java.time.Instant.parse(assigned.path("assignedAt").asText()));
+        mvc.perform(get("/api/v1/maintenance/work-orders/"+id+"/history").cookie(new Cookie("CF_SESSION","B"))).andExpect(status().isNotFound());
+        mvc.perform(get(MANAGEMENT+"/"+id+"/history").cookie(new Cookie("CF_SESSION","A"))).andExpect(status().isForbidden());
+        UUID outside=seedManaged(UUID.randomUUID(),"outside report");mvc.perform(get(MANAGEMENT+"/"+outside+"/history").cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isNotFound());
+        var managed=node(mvc.perform(get(MANAGEMENT+"/"+id+"/history").cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()));assertThat(managed).isEqualTo(history);
+        mvc.perform(get("/api/v1/maintenance/work-orders/"+id+"/history").param("actorId",A.toString()).cookie(new Cookie("CF_SESSION","A"))).andExpect(status().isBadRequest());
+        var listing=node(mvc.perform(get("/api/v1/maintenance/work-orders").cookie(new Cookie("CF_SESSION","A"))).andExpect(status().isOk()));assertThat(listing.path("items").get(0).has("history")).isFalse();
+    }
+    @Test void historyStableOrderAndNoMutationRoutes() throws Exception {
+        UUID id=UUID.fromString(node(create("A","stable",input("broken lamp"))).path("id").asText());dispatch(id,"dispatcher","stable",B,1).andExpect(status().isOk());
+        db.update("update work_order_history set occurred_at=? where work_order_id=?",java.sql.Timestamp.from(java.time.Instant.parse("2026-11-03T00:00:00Z")),id);
+        var expected=db.queryForList("select id from work_order_history where work_order_id=? order by occurred_at,id",UUID.class,id);
+        var history=node(mvc.perform(get(MANAGEMENT+"/"+id+"/history").cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()));
+        for(int i=0;i<2;i++)assertThat(history.get(i).path("id").asText()).isEqualTo(expected.get(i).toString());
+        for(var method:List.of(org.springframework.http.HttpMethod.POST,org.springframework.http.HttpMethod.PUT,org.springframework.http.HttpMethod.DELETE)){
+            int status=mvc.perform(csrf(request(method,MANAGEMENT+"/"+id+"/history")).cookie(new Cookie("CF_SESSION","manager")).contentType("application/json").content("{}")).andReturn().getResponse().getStatus();assertThat(status).isEqualTo(405);
+        }assertThat(count("work_order_history")).isEqualTo(2);
+    }
+    @Test void upgradeV2SavedResponsesPreservesOriginalBusinessResult() throws Exception {
+        String schema="snap_"+UUID.randomUUID().toString().replace("-","");String url=PG.getJdbcUrl("postgres","postgres");
+        try{
+            Flyway.configure().dataSource(url,"postgres","").schemas(schema).target("2").load().migrate();
+            UUID id=UUID.randomUUID(),history=UUID.randomUUID();String time="2026-11-02T08:00:00Z";
+            db.update("insert into "+schema+".work_orders(id,reporter_id,room_id,department_id,resource_version,fault_type,description,status,created_at,updated_at) values(?,?,?,?,1,'OTHER','broken lamp','PENDING_DISPATCH',?::timestamptz,?::timestamptz)",id,A,ROOM,DEP,time,time);
+            db.update("insert into "+schema+".work_order_history(id,work_order_id,actor_id,status,occurred_at) values(?,?,?,'PENDING_DISPATCH',?::timestamptz)",history,id,A,time);
+            var old=new LinkedHashMap<String,Object>();old.put("id",id);old.put("status","PENDING_DISPATCH");old.put("createdAt",time);old.put("resourceVersion",1);old.put("history",List.of(Map.of("actorId",A,"status","PENDING_DISPATCH","occurredAt",time)));
+            db.update("insert into "+schema+".creation_results values(?,?,?,?,?)",A,"key","original-input",id,mapper.writeValueAsString(old));
+            UUID assignedHistory=UUID.randomUUID();String assignedTime="2026-11-02T09:00:00Z";
+            db.update("update "+schema+".work_orders set status='ASSIGNED',assignee_id=?,dispatcher_id=?,assigned_at=?::timestamptz,updated_at=?::timestamptz,version=2 where id=?",B,A,assignedTime,assignedTime,id);
+            db.update("insert into "+schema+".work_order_history(id,work_order_id,actor_id,status,occurred_at,action,from_status,assignee_id) values(?,?,?,'ASSIGNED',?::timestamptz,'ASSIGNED','PENDING_DISPATCH',?)",assignedHistory,id,A,assignedTime,B);
+            var dispatched=new LinkedHashMap<String,Object>(old);dispatched.put("status","ASSIGNED");dispatched.put("version",2);dispatched.put("assignedAt",assignedTime);dispatched.put("assigneeId",B);dispatched.put("dispatcherId",A);dispatched.put("updatedAt",assignedTime);dispatched.remove("history");
+            db.update("insert into "+schema+".dispatch_results values(?,?,?,?)",A,"dispatch-key","original-dispatch",mapper.writeValueAsString(dispatched));
+            var migrated=Flyway.configure().dataSource(url,"postgres","").schemas(schema).load();assertThat(migrated.migrate().migrationsExecuted).isEqualTo(1);
+            var snapshot=mapper.readTree(db.queryForObject("select response_json from "+schema+".creation_results",String.class));assertThat(snapshot.has("resourceVersion")).isFalse();assertThat(snapshot.path("history").get(0).path("id").asText()).isEqualTo(history.toString());assertThat(snapshot.path("history").get(0).path("toStatus").asText()).isEqualTo("PENDING_DISPATCH");assertThat(snapshot.path("version").asInt()).isEqualTo(1);assertThat(db.queryForObject("select canonical_content from "+schema+".creation_results",String.class)).isEqualTo("original-input");assertThat(migrated.migrate().migrationsExecuted).isZero();
+            assertThat(snapshot.path("status").asText()).isEqualTo("PENDING_DISPATCH");assertThat(snapshot.path("assigneeId").isNull()).isTrue();assertThat(snapshot.path("history").size()).isEqualTo(1);
+            var savedDispatch=mapper.readTree(db.queryForObject("select response_json from "+schema+".dispatch_results",String.class));assertThat(savedDispatch.path("status").asText()).isEqualTo("ASSIGNED");assertThat(savedDispatch.path("version").asInt()).isEqualTo(2);assertThat(savedDispatch.path("history").size()).isEqualTo(2);assertThat(savedDispatch.path("history").get(1).path("id").asText()).isEqualTo(assignedHistory.toString());
+        }finally{db.execute("drop schema "+schema+" cascade");}
+    }
+    @Test void historyAuthorizationFailsClosedAndNeverWrites() throws Exception {
+        UUID id=UUID.fromString(node(create("A","protected-history",input("broken lamp"))).path("id").asText());
+        for(String base:List.of("/api/v1/maintenance/work-orders",MANAGEMENT)){
+            String path=base+"/"+id+"/history",user=base.equals(MANAGEMENT)?"manager":"A";
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+            mvc.perform(get(path).cookie(new Cookie("CF_SESSION","expired"))).andExpect(status().isUnauthorized());
+            mode="revoked";mvc.perform(get(path).cookie(new Cookie("CF_SESSION",user))).andExpect(status().isForbidden());
+            mode="down";mvc.perform(get(path).cookie(new Cookie("CF_SESSION",user))).andExpect(status().isServiceUnavailable());
+            mode="ok";
+            mvc.perform(get(path).cookie(new Cookie("CF_SESSION",user)).param("departmentId",DEP.toString())).andExpect(status().isBadRequest());
+            for(var method:List.of(org.springframework.http.HttpMethod.POST,org.springframework.http.HttpMethod.PUT,org.springframework.http.HttpMethod.DELETE)){
+                mvc.perform(csrf(request(method,path)).cookie(new Cookie("CF_SESSION",user)).contentType("application/json").content("{}")).andExpect(status().isMethodNotAllowed());
+            }
+        }
+        assertThat(count("work_order_history")).isEqualTo(1);assertThat(count("audit_outbox")).isEqualTo(1);
+        assertThat(count("dispatch_results")).isZero();
+    }
     @Test void G_emptyMigrationAndRepeat() {
         String schema="migration_"+UUID.randomUUID().toString().replace("-","");
         var clean=Flyway.configure().dataSource(PG.getJdbcUrl("postgres","postgres"),"postgres","").schemas(schema).load();
-        try { assertThat(clean.migrate().migrationsExecuted).isEqualTo(2);assertThat(clean.migrate().migrationsExecuted).isZero();clean.validate(); }
+        try { assertThat(clean.migrate().migrationsExecuted).isEqualTo(3);assertThat(clean.migrate().migrationsExecuted).isZero();clean.validate(); }
         finally { db.execute("drop schema "+schema+" cascade"); }
         flyway.validate();
     }

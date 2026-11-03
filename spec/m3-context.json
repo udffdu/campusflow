@@ -2,18 +2,15 @@
   "module": "M3",
   "purpose": "Persist stable task context without accepting unresolved business proposals",
   "authorization": {
-    "current_stage": "rebuild_dispatch_task3_tests_passed_pending_user_acceptance",
+    "current_stage": "rebuild_six_stages_user_accepted_local_commit_only",
     "business_implementation_authorized": true,
     "current_task_scope": [
-      "first_dispatch",
-      "final_eligibility_port",
-      "V2_migration",
-      "concurrency_idempotency",
-      "audit_delivery",
+      "history_endpoint_and_page",
+      "V3_format_compatibility",
+      "handoff_documents",
       "tests"
     ],
     "current_task_exclusions": [
-      "history_endpoint_and_page",
       "repair",
       "reassignment",
       "D_changes",

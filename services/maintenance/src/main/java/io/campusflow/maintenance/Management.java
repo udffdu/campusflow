@@ -7,8 +7,8 @@ import java.util.*;
 
 @Service
 public class Management {
-    private final JdbcTemplate db;
-    public Management(JdbcTemplate db) { this.db=db; }
+    private final JdbcTemplate db; private final WorkOrderHistory history;
+    public Management(JdbcTemplate db,WorkOrderHistory history) { this.db=db;this.history=history; }
     private String scope(DClient.Actor actor,List<Object> args) {
         if(actor.admin()) return "true"; // ADMIN still requires D allowed=true for maintenance.read.scope.
         args.add(actor.departmentId()); return "department_id=?";
@@ -18,10 +18,7 @@ public class Management {
         result.put("id",rs.getObject("id"));result.put("roomId",rs.getObject("room_id"));
         result.put("faultType",rs.getString("fault_type"));result.put("description",rs.getString("description"));
         result.put("status",rs.getString("status"));result.put("createdAt",rs.getTimestamp("created_at").toInstant());
-        result.put("assigneeId",rs.getObject("assignee_id"));
-        result.put("dispatcherId",rs.getObject("dispatcher_id"));
-        result.put("assignedAt",rs.getTimestamp("assigned_at")==null?null:rs.getTimestamp("assigned_at").toInstant());
-        result.put("version",rs.getLong("version"));result.put("updatedAt",rs.getTimestamp("updated_at").toInstant());
+        result.put("assigneeId",rs.getObject("assignee_id"));result.put("dispatcherId",rs.getObject("dispatcher_id"));result.put("assignedAt",rs.getTimestamp("assigned_at")==null?null:rs.getTimestamp("assigned_at").toInstant());result.put("version",rs.getLong("version"));result.put("updatedAt",rs.getTimestamp("updated_at").toInstant());
         return result;
     }
     @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
@@ -40,6 +37,6 @@ public class Management {
         List<Object> args=new ArrayList<>();String where=scope(actor,args);args.add(id);
         var rows=db.query("select id,room_id,fault_type,description,status,created_at,assignee_id,dispatcher_id,assigned_at,updated_at,version from work_orders where "+where+" and id=?",this::row,args.toArray());
         if(rows.isEmpty()) throw new Failure(404,"NOT_FOUND");
-        return rows.getFirst(); // Permission-based projection: no reporter, department or history identities.
+        var result=rows.getFirst();result.put("history",history.forOrder(id));return result;
     }
 }

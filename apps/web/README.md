@@ -15,3 +15,5 @@ M3重建验收记录见 [任务1B](../../docs/process/m3-rebuild-task1b-validati
 重建任务2在受权待派单管理详情加入候选搜索/分页/选择，当前D适配默认503，不产生派单操作。见 [任务2验收](../../docs/process/m3-rebuild-candidates-task2-validation.md)。
 
 重建任务3已加入首次派单面板、冲突刷新和原请求重试。生产候选/资格仍待D接入，入口开关不启用；见 [任务3验收](../../docs/process/m3-rebuild-dispatch-task3-validation.md)。
+
+重建任务4在本人/管理详情共用WorkOrderHistory，显示真实操作ID、状态与上海时间，无编辑入口；历史随详情权限及加载/错误状态清除。36项前端测试和构建通过，真实入口仍未开放；见 [任务4验收](../../docs/process/m3-rebuild-history-task4-validation.md)。

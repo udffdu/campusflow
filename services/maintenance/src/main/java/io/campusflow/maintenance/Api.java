@@ -31,4 +31,7 @@ class Api {
     @GetMapping("/work-orders/{id}") Map<String,Object> detail(@PathVariable UUID id,HttpServletRequest req) {
         var actor=d.authorize(token(req),"maintenance.read.own",null);params(req,Set.of());return orders.detail(actor.id(),id);
     }
+    @GetMapping("/work-orders/{id}/history") Object history(@PathVariable UUID id,HttpServletRequest req) {
+        var actor=d.authorize(token(req),"maintenance.read.own",null);params(req,Set.of());return orders.detail(actor.id(),id).get("history");
+    }
 }

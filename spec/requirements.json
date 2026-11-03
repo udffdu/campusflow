@@ -1,6 +1,6 @@
 {
   "register_status": "partial_draft",
-  "coverage_note": "M3按最终规则分阶段重建；当前仅任务1A。后续管理、派单、维修及真实D接入仍未完成。",
+  "coverage_note": "M3六阶段按最终规则重建并获用户内部验收；真实D联调、外部评审及后续维修未完成。",
   "requirements": [
     {
       "id": "CF-M2-001",
@@ -303,7 +303,7 @@
         "猜测他人工单 ID、修改筛选或分页不能越权；失效或停用账号被拒绝",
         "查询不泄露凭据或未授权用户资料，房间停用不删除历史工单；覆盖 docs/requirements/m3.md 中 R02 验收场景"
       ],
-      "progress_note": "1A/1B/任务1均经用户内部验收并本地提交；真实D联调及后续独立历史接口/页面尚未完成，baseline仍proposed。",
+      "progress_note": "六阶段重建已获用户内部验收；最终31后端/36前端测试通过。真实D与外部评审未完成，baseline仍proposed，不将整体需求标accepted。",
       "implementation": [
         "services/maintenance/src/main",
         "docs/requirements/m3-reporting-decisions.md",
@@ -311,7 +311,9 @@
         "apps/web/src/views/MyReportsView.vue",
         "services/maintenance/src/main/java/io/campusflow/maintenance/Management.java",
         "services/maintenance/src/main/java/io/campusflow/maintenance/ManagementApi.java",
-        "apps/web/src/views/ManagementView.vue"
+        "apps/web/src/views/ManagementView.vue",
+        "services/maintenance/src/main/java/io/campusflow/maintenance/WorkOrderHistory.java",
+        "apps/web/src/components/WorkOrderHistory.vue"
       ],
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
@@ -320,7 +322,9 @@
         "apps/web/src/maintenance.test.ts",
         "docs/process/m3-rebuild-task1b-validation.md",
         "apps/web/src/components/ManagementView.test.ts",
-        "docs/process/m3-rebuild-management-task1-validation.md"
+        "docs/process/m3-rebuild-management-task1-validation.md",
+        "docs/process/m3-rebuild-history-task4-validation.md",
+        "apps/web/src/components/WorkOrderHistory.test.ts"
       ]
     },
     {
@@ -341,7 +345,9 @@
         "contracts/m3-candidate-port.md",
         "services/maintenance/src/main/java/io/campusflow/maintenance/Dispatch.java",
         "services/maintenance/src/main/resources/db/migration/V2__dispatch.sql",
-        "apps/web/src/components/DispatchPanel.vue"
+        "apps/web/src/components/DispatchPanel.vue",
+        "services/maintenance/src/main/java/io/campusflow/maintenance/WorkOrderHistory.java",
+        "apps/web/src/components/WorkOrderHistory.vue"
       ],
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
@@ -349,9 +355,11 @@
         "docs/process/m3-rebuild-candidates-task2-validation.md",
         "docs/process/m3-rebuild-dispatch-task3-validation.md",
         "apps/web/src/components/DispatchPanel.test.ts",
-        "services/maintenance/src/test/java/io/campusflow/maintenance/EligibilityGuardTest.java"
+        "services/maintenance/src/test/java/io/campusflow/maintenance/EligibilityGuardTest.java",
+        "docs/process/m3-rebuild-history-task4-validation.md",
+        "apps/web/src/components/WorkOrderHistory.test.ts"
       ],
-      "progress_note": "任务2已验收提交a82b723；任务3首次派单/资格适配/并发幂等/审计恢复已重建，27后端及32前端测试通过，权限破坏测试预期失败后恢复。待本阶段用户验收，D真实联调仍未完成，baseline保持proposed。"
+      "progress_note": "六阶段重建已获用户内部验收；最终31后端/36前端测试通过。真实D与外部评审未完成，baseline仍proposed，不将整体需求标accepted。"
     }
   ]
 }

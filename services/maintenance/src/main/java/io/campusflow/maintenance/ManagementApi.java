@@ -19,4 +19,5 @@ class ManagementApi {
         return management.list(actor(req,Set.of("page","size","status")),page,size,status);
     }
     @GetMapping("/{id}") Map<String,Object> detail(@PathVariable UUID id,HttpServletRequest req){return management.detail(actor(req,Set.of()),id);}
+    @GetMapping("/{id}/history") Object history(@PathVariable UUID id,HttpServletRequest req){return management.detail(actor(req,Set.of()),id).get("history");}
 }

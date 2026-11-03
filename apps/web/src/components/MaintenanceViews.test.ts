@@ -47,3 +47,14 @@ it('clears detail on account switch and ignores the old response',async()=>{
  session.user!.permissions=[];await flushPromises()
  expect(w.text()).toContain('没有本人查询权限')
 })
+
+it('renders authorized detail history and clears it on session expiry',async()=>{
+ route.params={id:'ticket'}
+ request.mockResolvedValue({id:'ticket',roomId:'room',status:'ASSIGNED',faultType:'OTHER',description:'broken lamp',createdAt:'2026-11-03T00:00:00Z',history:[{id:'history',action:'CREATED',actorId:'actual-reporter-id',fromStatus:null,toStatus:'PENDING_DISPATCH',assigneeId:null,remark:null,occurredAt:'2026-11-03T00:00:00Z'}]})
+ const w=render(MyReportsView)
+ await flushPromises();expect(w.text()).toContain('actual-reporter-id');expect(w.text()).toContain('创建工单');expect(w.text()).toContain('08:00:00')
+ request.mockRejectedValue(new ApiError(401,'UNAUTHENTICATED','expired'))
+ await w.findAll('button').find(b=>b.text()==='刷新')!.trigger('click');await flushPromises()
+ expect(w.text()).not.toContain('actual-reporter-id');expect(w.text()).toContain('登录已失效')
+ session.user!.permissions=[];await flushPromises();expect(w.find('[aria-label="工单操作历史"]').exists()).toBe(false)
+})
