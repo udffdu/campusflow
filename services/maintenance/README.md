@@ -1,6 +1,6 @@
 # M3 上报与本人查询后端
 
-当前后端包含上报、本人列表/详情、受权管理列表/详情、D客户端和本地审计outbox。尚无派单或outbox投递worker；前端页面位于apps/web。规则见 [决定说明](../../docs/requirements/m3-reporting-decisions.md)，测试证据见 [验证记录](../../docs/process/m3-rebuild-task1a-validation.md)。
+当前后端包含上报、本人列表/详情、受权管理列表/详情、D客户端和本地审计outbox。现有首次派单和可配置启用的outbox投递worker（默认关闭）；前端页面位于apps/web。规则见 [决定说明](../../docs/requirements/m3-reporting-decisions.md)，测试证据见 [验证记录](../../docs/process/m3-rebuild-task1a-validation.md)。
 
 ## 启动
 
@@ -50,8 +50,10 @@ SELECT event_id, work_order_id, created_at, delivered_at FROM audit_outbox WHERE
 
 outbox 存在只表示原子持久化，delivered_at 为空，不表示 D 已收到审计。D 权限或入口评审未到位时只运行内部测试，不放宽鉴权演示。
 
-重建任务1A：完整详情遵循 contracts/m3-work-order-format-v1.md；V1映射派单字段null、version=1、updatedAt=createdAt。此阶段只可用于独立V1测试库，不能指向已有V2/V3业务库。
+重建任务1A：完整详情遵循 contracts/m3-work-order-format-v1.md；V1映射派单字段null、version=1、updatedAt=createdAt。早期1A仅用V1测试库；当前任务3使用隔离V1→V2升级/全新V2测试库，不连接业务库，不能用切换源码降级数据库。
 
 重建任务1已增加 GET /api/v1/maintenance/management/work-orders（page/size/status）及 /{id}。仅允许maintenance.read.scope获权身份，非ADMIN按院系过滤，详情越范围404。仅支持待派单状态，尚无派单/独立历史接口，候选接口见下方任务2说明；见 [本阶段验收](../../docs/process/m3-rebuild-management-task1-validation.md)。
 
 重建任务2新增GET /api/v1/maintenance/management/work-orders/{id}/candidates，要求maintenance.dispatch；生产PendingCandidateProvider明确503/D_CANDIDATES_NOT_READY。正式D接口仍待评审，不修改V1、不产生派单动作。见 [任务2验收](../../docs/process/m3-rebuild-candidates-task2-validation.md)。
+
+任务3新增POST /api/v1/maintenance/management/work-orders/{id}/dispatch，JSON仅assigneeId/expectedVersion，独立CSRF与Idempotency-Key。生产资格默认503；M3_AUDIT_ENABLED默认false，启用前须D确认。当前真实派单字段从V2读取，不再固定null；详见 [任务3验收及审计恢复](../../docs/process/m3-rebuild-dispatch-task3-validation.md)。

@@ -43,9 +43,10 @@ class ReportingTest {
                     else {
                         boolean allowed=!token.equals("denied") && Set.of("maintenance.report","maintenance.read.own").contains(req.path("permission").asText());
                         if(req.path("permission").asText().equals("maintenance.read.scope")) allowed=Set.of("manager","managerB","global").contains(token);
-                        if(req.path("permission").asText().equals("maintenance.dispatch")) allowed=token.equals("dispatcher");
+                        if(req.path("permission").asText().equals("maintenance.dispatch")) allowed=token.equals("dispatcher")||token.equals("dispatcher2");
+                        if(mode.equals("revoked"))allowed=false;
                         if(mode.equals("scope") && req.has("departmentId")) allowed=false;
-                        body=Map.of("allowed",allowed,"identity",Map.of("id",token.equals("B")?B:A,"departmentId",token.equals("managerB")?DEP_B:DEP,"active",true,"roles",List.of(token.equals("global")||token.equals("adminWithoutPermission")?"ADMIN":"MEMBER")));
+                        body=Map.of("allowed",allowed,"identity",Map.of("id",token.equals("B")||token.equals("dispatcher2")?B:A,"departmentId",token.equals("managerB")?DEP_B:DEP,"active",true,"roles",List.of(token.equals("global")||token.equals("adminWithoutPermission")?"ADMIN":"MEMBER")));
                     }
                 } else if(mode.equals("missing")) { status=404;body=Map.of(); }
                 else body=Map.of("id",ROOM,"departmentId",mode.equals("scope")?UUID.randomUUID():DEP,"type",mode.equals("seat")?"SEAT":"ROOM","effectiveActive",!mode.equals("inactive"),"version",1);
@@ -58,7 +59,7 @@ class ReportingTest {
         r.add("maintenance.d-url",()->"http://127.0.0.1:"+D.getAddress().getPort());r.add("maintenance.service-key",()->KEY);r.add("maintenance.cookie-secure",()->false);
     }
     @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired ObjectMapper mapper;@Autowired Flyway flyway;
-    @BeforeEach void reset() { mode="ok";db.execute("truncate creation_results,audit_outbox,work_order_history,work_orders"); }
+    @BeforeEach void reset() { mode="ok";db.execute("truncate dispatch_results,creation_results,audit_outbox,work_order_history,work_orders"); }
     @AfterAll static void close() throws Exception { D.stop(0);PG.close(); }
     MockHttpServletRequestBuilder csrf(MockHttpServletRequestBuilder req) throws Exception {
         var res=mvc.perform(get("/api/v1/maintenance/csrf")).andExpect(status().isOk()).andReturn().getResponse();var body=mapper.readTree(res.getContentAsString());
@@ -180,7 +181,7 @@ class ReportingTest {
     static final String MANAGEMENT="/api/v1/maintenance/management/work-orders";
     UUID seedManaged(UUID department,String text) {
         UUID id=UUID.randomUUID();
-        db.update("insert into work_orders(id,reporter_id,room_id,department_id,resource_version,fault_type,description,status,created_at) values(?,?,?,?,?,?,?,?,?)",id,B,ROOM,department,1,"OTHER",text,"PENDING_DISPATCH",java.sql.Timestamp.from(java.time.Instant.now()));return id;
+        db.update("insert into work_orders(id,reporter_id,room_id,department_id,resource_version,fault_type,description,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,now())",id,B,ROOM,department,1,"OTHER",text,"PENDING_DISPATCH",java.sql.Timestamp.from(java.time.Instant.now()));return id;
     }
     @Test void managementScopePaginationAndPrivacy() throws Exception {
         UUID own=seedManaged(DEP,"private description "+"x".repeat(200));UUID foreign=seedManaged(UUID.randomUUID(),"foreign secret");seedManaged(DEP,"second own report");
@@ -234,13 +235,21 @@ class ReportingTest {
         assertThat(detail.path("version").asInt()).isEqualTo(1);
         assertThat(detail.path("description").asText()).hasSize(200);
         assertThat(detail.toString()).doesNotContain("reporterId","departmentId","actorId","history","password","token");
-        mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager")).param("status","ASSIGNED")).andExpect(status().isBadRequest());
+        mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager")).param("status","ASSIGNED")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
         mode="inactive"; // Historical queries do not require the room to remain active.
         mvc.perform(get(MANAGEMENT+"/"+a).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk());
     }
     static volatile List<?> lastCandidateContext=List.of();
     @org.springframework.boot.test.context.TestConfiguration
     static class CandidateConfiguration {
+        @org.springframework.context.annotation.Bean @org.springframework.context.annotation.Primary
+        AssigneeEligibility eligibility(){return request->{
+            if(mode.equals("eligibilityDown"))return new PendingAssigneeEligibility().check(request);
+            return new AssigneeEligibility.Decision(request.assigneeId(),request.roomId(),request.departmentId(),!mode.equals("ineligible"),null);
+        };}
+        @org.springframework.context.annotation.Bean @org.springframework.context.annotation.Primary
+        AuditTransport audit(){return payload->{if(mode.equals("auditDown"))throw new Failure(503,"AUDIT_UNAVAILABLE");};}
+
         @org.springframework.context.annotation.Bean @org.springframework.context.annotation.Primary
         CandidateProvider candidates(){return (actor,room,department,q,page,size)->{
             lastCandidateContext=List.of(actor,room,department,q);
@@ -299,10 +308,81 @@ class ReportingTest {
         mode="down";mvc.perform(get(url).cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isServiceUnavailable());
         assertThat(count("work_orders")).isEqualTo(1);
     }
+    @Autowired AuditDelivery delivery;
+    ResultActions dispatch(UUID id,String user,String key,UUID assignee,long version) throws Exception {
+        return mvc.perform(csrf(post(MANAGEMENT+"/"+id+"/dispatch")).cookie(new Cookie("CF_SESSION",user)).header("Idempotency-Key",key).contentType("application/json").content(mapper.writeValueAsString(Map.of("assigneeId",assignee,"expectedVersion",version))));
+    }
+    @Test void dispatchPersistsReplaysAndAuditRecovers() throws Exception {
+        UUID id=seedManaged(DEP,"broken lamp");String first=dispatch(id,"dispatcher","same",B,1).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(dispatch(id,"dispatcher","same",B,1).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).isEqualTo(first);
+        assertThat(db.queryForObject("select assignee_id from work_orders where id=?",UUID.class,id)).isEqualTo(B);
+        assertThat(db.queryForObject("select dispatcher_id from work_orders where id=?",UUID.class,id)).isEqualTo(A);
+        assertThat(db.queryForObject("select version from work_orders where id=?",Long.class,id)).isEqualTo(2);
+        assertThat(count("work_order_history")).isEqualTo(1);assertThat(count("audit_outbox")).isEqualTo(1);
+        assertThat(db.queryForObject("select action from work_order_history",String.class)).isEqualTo("ASSIGNED");
+        dispatch(id,"dispatcher","same",A,1).andExpect(status().isConflict());dispatch(id,"dispatcher","new",B,2).andExpect(status().isConflict());
+        mvc.perform(get(MANAGEMENT+"/"+id).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ASSIGNED")).andExpect(jsonPath("$.assigneeId").value(B.toString()));
+        UUID event=db.queryForObject("select event_id from audit_outbox",UUID.class);
+        mode="auditDown";delivery.deliver();assertThat(db.queryForObject("select status from audit_outbox",String.class)).isEqualTo("RETRY");assertThat(db.queryForObject("select last_error_code from audit_outbox",String.class)).isEqualTo("AUDIT_UNAVAILABLE");
+        mode="ok";db.update("update audit_outbox set next_attempt_at=now()");delivery.deliver();assertThat(db.queryForObject("select status from audit_outbox",String.class)).isEqualTo("DELIVERED");assertThat(db.queryForObject("select event_id from audit_outbox",UUID.class)).isEqualTo(event);assertThat(db.queryForObject("select attempts from audit_outbox",Integer.class)).isEqualTo(2);
+    }
+    @Test void dispatchPermissionScopeAndQualification() throws Exception {
+        UUID id=seedManaged(DEP,"broken lamp");dispatch(id,"A","x",B,1).andExpect(status().isForbidden());dispatch(seedManaged(UUID.randomUUID(),"outside lamp"),"dispatcher","x",B,1).andExpect(status().isNotFound());
+        mode="ineligible";dispatch(id,"dispatcher","x",B,1).andExpect(status().isConflict());mode="eligibilityDown";dispatch(id,"dispatcher","x",B,1).andExpect(status().isServiceUnavailable());mode="ok";dispatch(id,"dispatcher","x",B,2).andExpect(status().isConflict());
+        assertThat(count("dispatch_results")).isZero();assertThat(count("work_order_history")).isZero();assertThat(count("audit_outbox")).isZero();assertThat(db.queryForObject("select status from work_orders where id=?",String.class,id)).isEqualTo("PENDING_DISPATCH");
+    }
+    @Test void dispatchConcurrentOnlyOneWinner() throws Exception {
+        UUID id=seedManaged(DEP,"broken lamp");
+        try(var pool=Executors.newFixedThreadPool(2)){var barrier=new CyclicBarrier(2);List<Future<Integer>> futures=new ArrayList<>();for(String user:List.of("dispatcher","dispatcher2"))futures.add(pool.submit(()->{barrier.await();return dispatch(id,user,user,UUID.randomUUID(),1).andReturn().getResponse().getStatus();}));List<Integer> codes=new ArrayList<>();for(var f:futures)codes.add(f.get(20,TimeUnit.SECONDS));assertThat(codes).containsExactlyInAnyOrder(200,409);}
+        assertThat(count("work_order_history")).isEqualTo(1);assertThat(count("dispatch_results")).isEqualTo(1);assertThat(count("audit_outbox")).isEqualTo(1);
+    }
+    @Test void dispatchConcurrentSameKey() throws Exception {
+        UUID id=seedManaged(DEP,"broken lamp");try(var pool=Executors.newFixedThreadPool(4)){var barrier=new CyclicBarrier(4);List<Future<String>> futures=new ArrayList<>();for(int i=0;i<4;i++)futures.add(pool.submit(()->{barrier.await();return dispatch(id,"dispatcher","same",B,1).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();}));Set<String> results=new HashSet<>();for(var f:futures)results.add(f.get(20,TimeUnit.SECONDS));assertThat(results).hasSize(1);}assertThat(count("work_order_history")).isEqualTo(1);assertThat(count("audit_outbox")).isEqualTo(1);
+    }
+    @Test void dispatchRollback() throws Exception {
+        UUID id=seedManaged(DEP,"broken lamp");for(String table:List.of("work_order_history","audit_outbox","dispatch_results")){
+            db.execute("create function fail_dispatch() returns trigger language plpgsql as $$ begin raise exception 'test failure'; end $$");db.execute("create trigger injected before "+(table.equals("dispatch_results")?"UPDATE":"INSERT")+" on "+table+" for each row execute function fail_dispatch()");
+            try{dispatch(id,"dispatcher","rollback",B,1).andExpect(status().isInternalServerError());assertThat(count("work_order_history")).isZero();assertThat(count("audit_outbox")).isZero();assertThat(count("dispatch_results")).isZero();assertThat(db.queryForObject("select version from work_orders where id=?",Long.class,id)).isEqualTo(1);}finally{db.execute("drop trigger injected on "+table);db.execute("drop function fail_dispatch()");}
+        }
+        dispatch(id,"dispatcher","rollback",B,1).andExpect(status().isOk());
+    }
+    @Test void upgradeExistingV1Data() {
+        String schema="upgrade_"+UUID.randomUUID().toString().replace("-","");String url=PG.getJdbcUrl("postgres","postgres");
+        try{
+            Flyway.configure().dataSource(url,"postgres","").schemas(schema).target("1").load().migrate();
+            UUID id=UUID.randomUUID();db.update("insert into "+schema+".work_orders values(?,?,?,?,?,?,?,?,?)",id,A,ROOM,DEP,1,"OTHER","existing repair","PENDING_DISPATCH",java.sql.Timestamp.from(java.time.Instant.now()));
+            var upgraded=Flyway.configure().dataSource(url,"postgres","").schemas(schema).load();assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(1);assertThat(upgraded.migrate().migrationsExecuted).isZero();
+            assertThat(db.queryForObject("select version from "+schema+".work_orders where id=?",Long.class,id)).isEqualTo(1);assertThat(db.queryForObject("select updated_at=created_at from "+schema+".work_orders where id=?",Boolean.class,id)).isTrue();upgraded.validate();
+        }finally{db.execute("drop schema "+schema+" cascade");}
+    }
+    @Test void dispatchFromRealReportPreservesFormatAndOriginalCreationReplay() throws Exception {
+        var created=node(create("A","chain-create",input("broken lamp")).andExpect(status().isCreated()));
+        UUID id=UUID.fromString(created.path("id").asText());
+        var result=node(dispatch(id,"dispatcher","chain-dispatch",B,1).andExpect(status().isOk()));
+        assertThat(result.path("status").asText()).isEqualTo("ASSIGNED");
+        var own=node(mvc.perform(get("/api/v1/maintenance/work-orders/"+id).cookie(new Cookie("CF_SESSION","A"))).andExpect(status().isOk()));
+        assertThat(own.path("version").asInt()).isEqualTo(2);
+        assertThat(own.path("assigneeId").asText()).isEqualTo(B.toString());
+        assertThat(own.path("dispatcherId").asText()).isEqualTo(A.toString());
+        assertThat(own.path("history").size()).isEqualTo(2);
+        var assigned=own.path("history").get(1);
+        assertThat(assigned.path("action").asText()).isEqualTo("ASSIGNED");
+        assertThat(assigned.path("fromStatus").asText()).isEqualTo("PENDING_DISPATCH");
+        assertThat(assigned.path("toStatus").asText()).isEqualTo("ASSIGNED");
+        assertThat(assigned.path("actorId").asText()).isEqualTo(A.toString());
+        assertThat(assigned.path("assigneeId").asText()).isEqualTo(B.toString());
+        assertThat(assigned.path("occurredAt")).isEqualTo(own.path("assignedAt"));
+        assertThat(own.path("updatedAt")).isEqualTo(own.path("assignedAt"));
+        assertThat(node(create("A","chain-create",input("broken lamp")).andExpect(status().isCreated()))).isEqualTo(created);
+        dispatch(id,"dispatcher","chain-dispatch",B,1).andExpect(status().isOk());
+        assertThat(count("work_order_history")).isEqualTo(2);assertThat(count("audit_outbox")).isEqualTo(2);
+        mode="revoked";dispatch(id,"dispatcher","chain-dispatch",B,1).andExpect(status().isForbidden());
+        assertThat(count("dispatch_results")).isEqualTo(1);
+    }
     @Test void G_emptyMigrationAndRepeat() {
         String schema="migration_"+UUID.randomUUID().toString().replace("-","");
         var clean=Flyway.configure().dataSource(PG.getJdbcUrl("postgres","postgres"),"postgres","").schemas(schema).load();
-        try { assertThat(clean.migrate().migrationsExecuted).isEqualTo(1);assertThat(clean.migrate().migrationsExecuted).isZero();clean.validate(); }
+        try { assertThat(clean.migrate().migrationsExecuted).isEqualTo(2);assertThat(clean.migrate().migrationsExecuted).isZero();clean.validate(); }
         finally { db.execute("drop schema "+schema+" cascade"); }
         flyway.validate();
     }

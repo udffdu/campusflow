@@ -18,6 +18,7 @@ spring:
 maintenance:
   d-url: ${M3_D_URL}
   service-key: ${M3_SERVICE_KEY}
+  audit-enabled: ${M3_AUDIT_ENABLED:false}
   cookie-secure: ${M3_COOKIE_SECURE:true}
 logging:
   level:

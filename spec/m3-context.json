@@ -2,20 +2,22 @@
   "module": "M3",
   "purpose": "Persist stable task context without accepting unresolved business proposals",
   "authorization": {
-    "current_stage": "rebuild_candidates_task2_user_accepted",
+    "current_stage": "rebuild_dispatch_task3_tests_passed_pending_user_acceptance",
     "business_implementation_authorized": true,
     "current_task_scope": [
-      "candidate_query_port",
-      "candidate_picker_search_pagination",
-      "tests",
-      "D_contract_proposal"
+      "first_dispatch",
+      "final_eligibility_port",
+      "V2_migration",
+      "concurrency_idempotency",
+      "audit_delivery",
+      "tests"
     ],
     "current_task_exclusions": [
-      "dispatch",
-      "history_page",
+      "history_endpoint_and_page",
+      "repair",
+      "reassignment",
       "D_changes",
-      "proxy_activation",
-      "repair"
+      "proxy_activation"
     ],
     "current_task_review": "docs/requirements/m3-reporting-task-review.md",
     "user_responsibility": [
@@ -83,7 +85,7 @@
     "format": "contracts/m3-work-order-format-v1.md",
     "reporting_decisions": "docs/requirements/m3-reporting-decisions.md",
     "reconstruction": "docs/process/m3-reconstruction-plan.md",
-    "verification": "docs/process/m3-rebuild-candidates-task2-validation.md",
+    "verification": "docs/process/m3-rebuild-dispatch-task3-validation.md",
     "candidate_port": "contracts/m3-candidate-port.md"
   },
   "change_policy": "Update this context when the user explicitly changes scope or rules; external contracts and schema changes still require affected-owner review. Do not infer acceptance from a recommendation."

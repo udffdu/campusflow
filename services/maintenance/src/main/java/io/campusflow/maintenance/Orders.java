@@ -32,7 +32,7 @@ public class Orders {
             return (String)existing.get("response_json");
         }
         UUID id=UUID.randomUUID();Instant now=Instant.now();Timestamp timestamp=Timestamp.from(now);
-        db.update("insert into work_orders(id,reporter_id,room_id,department_id,resource_version,fault_type,description,status,created_at) values(?,?,?,?,?,?,?,?,?)",id,actor.id(),room.id(),room.departmentId(),room.version(),input.faultType(),input.description(),"PENDING_DISPATCH",timestamp);
+        db.update("insert into work_orders(id,reporter_id,room_id,department_id,resource_version,fault_type,description,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?)",id,actor.id(),room.id(),room.departmentId(),room.version(),input.faultType(),input.description(),"PENDING_DISPATCH",timestamp,timestamp);
         db.update("insert into work_order_history(id,work_order_id,actor_id,status,occurred_at) values(?,?,?,?,?)",UUID.randomUUID(),id,actor.id(),"PENDING_DISPATCH",timestamp);
         UUID eventId=UUID.randomUUID();
         String event=encode(Map.of("eventId",eventId,"actorId",actor.id(),"departmentId",room.departmentId(),"action","MAINTENANCE.REPORTED","objectType","WORK_ORDER","objectId",id,"outcome","SUCCESS","occurredAt",now));
@@ -43,14 +43,7 @@ public class Orders {
     }
     private Map<String,Object> map(java.sql.ResultSet rs,int row) throws java.sql.SQLException {
         var result=new LinkedHashMap<String,Object>();
-        // V1 only stores creation facts. These values follow Format v1 without rewriting V1.
-        // Stage 3 will read persisted assignment/version columns introduced by V2.
-        result.put("assigneeId",null);
-        result.put("dispatcherId",null);
-        result.put("assignedAt",null);
-        result.put("updatedAt",rs.getTimestamp("created_at").toInstant());
-        result.put("version",1L);
-        result.put("id",rs.getObject("id"));result.put("reporterId",rs.getObject("reporter_id"));result.put("roomId",rs.getObject("room_id"));result.put("departmentId",rs.getObject("department_id"));result.put("faultType",rs.getString("fault_type"));result.put("description",rs.getString("description"));result.put("status",rs.getString("status"));result.put("createdAt",rs.getTimestamp("created_at").toInstant());return result;
+        result.put("assigneeId",rs.getObject("assignee_id"));result.put("dispatcherId",rs.getObject("dispatcher_id"));result.put("assignedAt",rs.getTimestamp("assigned_at")==null?null:rs.getTimestamp("assigned_at").toInstant());result.put("updatedAt",rs.getTimestamp("updated_at").toInstant());result.put("version",rs.getLong("version"));result.put("id",rs.getObject("id"));result.put("reporterId",rs.getObject("reporter_id"));result.put("roomId",rs.getObject("room_id"));result.put("departmentId",rs.getObject("department_id"));result.put("faultType",rs.getString("fault_type"));result.put("description",rs.getString("description"));result.put("status",rs.getString("status"));result.put("createdAt",rs.getTimestamp("created_at").toInstant());return result;
     }
     @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public Map<String,Object> list(UUID reporter,int page,int size) {

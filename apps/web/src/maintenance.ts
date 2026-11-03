@@ -12,7 +12,7 @@ export function maintenanceMessage(error:unknown) {
   }
   return error instanceof Error?error.message:'操作失败，请重试。'
 }
-export async function maintenance<T>(path:string,body?:ReportInput,key?:string):Promise<T> {
+export async function maintenance<T>(path:string,body?:ReportInput|{assigneeId:string;expectedVersion:number},key?:string):Promise<T> {
   if(!maintenanceEnabled()) throw new Error('报修服务接入尚未开放，请等待入口与权限配置完成。')
   const request=async(url:string,options:RequestInit={})=>{
     let response:Response

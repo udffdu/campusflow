@@ -338,14 +338,20 @@
       "implementation": [
         "services/maintenance/src/main/java/io/campusflow/maintenance/CandidatesApi.java",
         "apps/web/src/components/CandidatePicker.vue",
-        "contracts/m3-candidate-port.md"
+        "contracts/m3-candidate-port.md",
+        "services/maintenance/src/main/java/io/campusflow/maintenance/Dispatch.java",
+        "services/maintenance/src/main/resources/db/migration/V2__dispatch.sql",
+        "apps/web/src/components/DispatchPanel.vue"
       ],
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
         "apps/web/src/components/CandidatePicker.test.ts",
-        "docs/process/m3-rebuild-candidates-task2-validation.md"
+        "docs/process/m3-rebuild-candidates-task2-validation.md",
+        "docs/process/m3-rebuild-dispatch-task3-validation.md",
+        "apps/web/src/components/DispatchPanel.test.ts",
+        "services/maintenance/src/test/java/io/campusflow/maintenance/EligibilityGuardTest.java"
       ],
-      "progress_note": "任务2候选查询与选择已重建，后端17项/前端29项、类型与构建通过，待用户验收。生产D候选适配默认503；首次派单尚未进入重建阶段，真实D联调未完成。"
+      "progress_note": "任务2已验收提交a82b723；任务3首次派单/资格适配/并发幂等/审计恢复已重建，27后端及32前端测试通过，权限破坏测试预期失败后恢复。待本阶段用户验收，D真实联调仍未完成，baseline保持proposed。"
     }
   ]
 }
