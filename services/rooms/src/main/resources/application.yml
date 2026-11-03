@@ -1,0 +1,33 @@
+server:
+  port: ${ROOMS_PORT:8082}
+  error:
+    include-message: never
+    include-stacktrace: never
+spring:
+  application:
+    name: campusflow-rooms
+  datasource:
+    url: ${ROOMS_DATABASE_URL:jdbc:postgresql://localhost:5432/campusflow_rooms}
+    username: ${ROOMS_DATABASE_USER:campusflow_rooms}
+    password: ${ROOMS_DATABASE_PASSWORD:}
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  flyway:
+    enabled: true
+    schemas: m2
+    default-schema: m2
+rooms:
+  platform-url: ${PLATFORM_URL:http://127.0.0.1:8080}
+  platform-key: ${M2_SERVICE_KEY:}
+  occupancy-url: ${M1_URL:http://127.0.0.1:8081}
+  occupancy-key: ${M2_OCCUPANCY_KEY:}
+  cookie-secure: ${COOKIE_SECURE:true}
+  approval-hours: ${ROOMS_APPROVAL_HOURS:48}
+  max-hours: ${ROOMS_MAX_HOURS:8}
+  advance-days: ${ROOMS_ADVANCE_DAYS:30}
+  worker-delay-ms: 3000
+  workers-enabled: true
+logging:
+  level:
+    org.springframework.security: WARN

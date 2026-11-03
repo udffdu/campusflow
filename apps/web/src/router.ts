@@ -9,6 +9,7 @@ import UsersView from './views/UsersView.vue'
 import NotificationsView from './views/NotificationsView.vue'
 import DeliveriesView from './views/DeliveriesView.vue'
 import AuditView from './views/AuditView.vue'
+import RoomsView from './views/RoomsView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 import RoomCheckInDisplayView from './views/RoomCheckInDisplayView.vue'
 import SeatUsageView from './views/SeatUsageView.vue'
@@ -16,6 +17,7 @@ import OperationsDashboardView from './views/OperationsDashboardView.vue'
 export const router = createRouter({ history: createWebHistory(), routes: [
   {path:'/login', component:LoginView, meta:{title:'登录'}},
   {path:'/', component:OverviewView, meta:{title:'工作台'}},
+  {path:'/room-applications',component:RoomsView,meta:{title:'教室申请',permission:'rooms.read'}},
   {path:'/seat-reservations',component:SeatQueryView,props:{booking:true},meta:{title:'座位预约',permission:'seats.availability.read'}},
   {path:'/seat-reservation-demo',component:SeatQueryView,props:{demo:true},meta:{title:'个人预约演示',permission:'seats.availability.read'}},
   {path:'/seat-query',component:SeatQueryView,meta:{title:'座位查询',permission:'seats.availability.read'}},

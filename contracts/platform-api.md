@@ -73,7 +73,7 @@ ResourceCreate：`{type,parentId,code,name,departmentId,capacity,features:[],ope
 | POST `/audit` | AuditEvent → `{id}`；按 source+eventId 去重，载荷不同 409 |
 
 业务服务从浏览器转发的 HttpOnly CF_SESSION Cookie 提取 sessionToken，在服务端调用 authorization；不要求前端读取会话。业务服务不能信任用户自报 actorId。D 不可用时，受保护写入应拒绝。
-当前permission目录包含D原有权限、三项个人座位权限及`seats.operations.read`；permission参数仍仅接受`[a-z.]{1,64}`。不要把spaces.write当作预约、运营、审批或派单资格。M2/M3其他业务权限尚未登记，仍需对应方案。
+当前 permission 目录包含 D 原有权限、M1 三项个人座位权限及 `seats.operations.read`、M2 的 `rooms.read/apply/review/approve/manage`。参数仍仅接受 `[a-z.]{1,64}`。M2 角色与范围、V2.1 兼容升级见 [M2 契约](rooms-api.md)；不要把 spaces.write 当作预约、运营、审批或派单资格。M3 权限仍待对应方案评审登记。
 
 NotificationEvent（虚构示例）：
 

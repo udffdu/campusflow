@@ -15,6 +15,7 @@ const route = useRoute(); const router = useRouter(); const menuOpen = ref(false
 const passwordOpen = ref(false); const currentPassword = ref(''); const newPassword = ref(''); const error = ref(''); const busy = ref(false)
 const navigation = computed(() => [
   {path:'/',name:'工作台',icon:'grid',show:true}, {path:'/resources',name:'空间资源',icon:'space',show:can('spaces.read')},
+  {path:'/room-applications',name:'教室申请',icon:'space',show:can('rooms.read')},
   {path:'/seat-query',name:'座位查询',icon:'chair',show:can('seats.availability.read')},
   {path:'/my-reservations',name:'我的预约',icon:'chair',show:can('seats.reservations.read.own')},
   {path:'/seat-operations',name:'预约运营',icon:'grid',show:can('seats.operations.read')},
@@ -37,7 +38,7 @@ onUnmounted(() => clearInterval(poll))
   <div v-else-if="session.user" class="app-shell">
     <aside class="sidebar" :class="{open:menuOpen}">
       <RouterLink to="/" class="brand"><span class="brand-mark">c<span>f</span></span><span>CampusFlow<small>校园资源协同平台</small></span></RouterLink>
-      <div class="workspace-label"><span class="live-dot"/> 校园公共服务 <span class="workspace-tag">D</span></div>
+      <div class="workspace-label"><span class="live-dot"/> 校园协同服务 <span class="workspace-tag">CF</span></div>
       <div class="nav-caption">工作空间</div>
       <nav aria-label="主导航"><RouterLink v-for="item in navigation" :key="item.path" :to="item.path" :class="{active:route.path===item.path}" @click="menuOpen=false"><Icon :name="item.icon"/><span>{{item.name}}</span><span v-if="item.path==='/notifications'&&session.unread" class="nav-badge">{{session.unread}}</span></RouterLink></nav>
       <div class="sidebar-note"><Icon name="shield" :size="23"/><strong>连接校园的每一处空间</strong><p>让资源有序，让协作发生。</p><span>CampusFlow / 公共服务</span></div>
@@ -45,7 +46,7 @@ onUnmounted(() => clearInterval(poll))
     </aside>
     <div v-if="menuOpen" class="mobile-backdrop" @click="menuOpen=false"/>
     <div class="main-area">
-      <header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" aria-label="打开导航" @click="menuOpen=!menuOpen"><Icon name="menu"/></button><span>公共服务</span><Icon name="chevron" :size="14"/><strong>{{route.meta.title}}</strong></div><div class="topbar-actions"><span class="topbar-date">{{date}}</span><RouterLink to="/notifications" class="icon-button notification-button" aria-label="打开通知中心"><Icon name="bell"/><i v-if="session.unread"/></RouterLink><button class="icon-button" aria-label="修改密码" @click="passwordOpen=true;error='' "><Icon name="key"/></button><span class="avatar small-avatar">{{session.user.displayName.slice(0,1)}}</span></div></header>
+      <header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" aria-label="打开导航" @click="menuOpen=!menuOpen"><Icon name="menu"/></button><span>校园服务</span><Icon name="chevron" :size="14"/><strong>{{route.meta.title}}</strong></div><div class="topbar-actions"><span class="topbar-date">{{date}}</span><RouterLink to="/notifications" class="icon-button notification-button" aria-label="打开通知中心"><Icon name="bell"/><i v-if="session.unread"/></RouterLink><button class="icon-button" aria-label="修改密码" @click="passwordOpen=true;error='' "><Icon name="key"/></button><span class="avatar small-avatar">{{session.user.displayName.slice(0,1)}}</span></div></header>
       <main id="main-content"><p v-if="error&&!passwordOpen" class="form-error" role="alert">{{error}}</p><RouterView/></main>
       <footer class="page-footer"><span>CampusFlow · 校园资源协同平台</span><span>有序连接，共享校园</span></footer>
     </div>

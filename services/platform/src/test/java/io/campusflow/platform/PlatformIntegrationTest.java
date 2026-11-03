@@ -337,7 +337,14 @@ class PlatformIntegrationTest {
         assertThatThrownBy(()->db.update("delete from audit_events where id=?",UUID.fromString(id))).isInstanceOf(DataAccessException.class);
     }
     @Test void migrationsCanReplayWithoutChangingAppliedHistory() {
-        assertThat(flyway.info().applied()).hasSize(6);assertThat(flyway.migrate().migrationsExecuted).isZero();
+        assertThat(flyway.info().applied()).hasSize(7);assertThat(flyway.migrate().migrationsExecuted).isZero();
+    }
+    @Test void bothSeatAndRoomBuiltinRolesRemainProtected()throws Exception{
+        for(String role:List.of("SEAT_USER","ROOM_APPLICANT","ROOM_REVIEWER","ROOM_APPROVER")){
+            assertThat(db.queryForObject("select count(*) from roles where code=?",Integer.class,role)).isEqualTo(1);
+            json(put("/api/v1/roles/"+role),new RoleWrite(role,"overwrite",Set.of("spaces.read")),admin)
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("BUILTIN_ROLE"));
+        }
     }
     @Test void customRolesCannotGrantGlobalPrivilegesAndChangesAreImmediate() throws Exception {
         json(post("/api/v1/roles"),new RoleWrite("LIBRARIAN","图书馆空间维护",Set.of("spaces.read","spaces.write")),admin).andExpect(status().isCreated());
@@ -464,7 +471,7 @@ class PlatformIntegrationTest {
             legacy.update("insert into user_roles values(?,'MEMBER')",user);
             long version=legacy.queryForObject("select version from resources where id=?",Long.class,room);
             var upgraded=Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load();
-            assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(4);
+            assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(5);
             assertThat(upgraded.migrate().migrationsExecuted).isZero();
             assertThat(legacy.queryForObject("select booking_scope from resources where id=?",String.class,room)).isEqualTo("DEPARTMENT");
             assertThat(legacy.queryForObject("select version from resources where id=?",Long.class,room)).isGreaterThan(version);

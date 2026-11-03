@@ -2,7 +2,7 @@
 
 以自习座位预约为核心，连接整教室申请审批与物业报修的课程实践项目。
 
-当前阶段：D 公共层与前端公共外壳已实现；M1-A 个人预约及 M1-B 的 CF-M1-007～011 已完成本地实现并具备隔离验证入口。M1-B 覆盖每日教室码、本人签到、使用计时与退座、预约提醒、违约终结与通知、可视化历史，以及院系范围内的预约运营统计。真实 SMTP 服务商验收、D 负责人评审、M2/M3 业务及完整跨模块联调仍未完成；尚未部署华为云。
+当前阶段：D 公共层、M1 个人预约与签到提醒/历史/运营、M2 申请审批与恢复页面已实现并具备验证入口。真实 SMTP 服务商、M1 整室占用及 M2/M3 完整联调仍未验收，尚未部署华为云。
 
 ## 已确认的上下文
 
@@ -51,6 +51,8 @@ Shell 脚本会自动选择可用的 Python 3.11+：Linux/macOS 通常为`python
 ```sh
 cd services/platform
 ./mvnw verify
+cd ../rooms
+./mvnw verify
 cd ../../apps/web
 npm ci
 npm test
@@ -64,14 +66,15 @@ npm run build
 需要 Java 21、Node 22.12+，首次运行需下载依赖，Maven 无需预装。隔离演示无需系统 PostgreSQL 或 Docker：
 
 ```sh
-./scripts/run-local-demo.sh
+# D + M2 演示（D 单独演示仍可用 run-local-demo.sh）
+./scripts/run-m2-demo.sh
 # 另开终端：
 cd apps/web
 npm ci
 npm run dev
 ```
 
-脚本会提示为本次演示设置 `admin` 密码，不回显；也可通过 `BOOTSTRAP_ADMIN_PASSWORD` 环境变量注入。打开 [本地工作台](http://127.0.0.1:5173)。演示数据库随进程结束清理，样例数据与正式业务数据分离。持久化开发环境见 [环境说明](infra/README.md)。
+脚本会提示为本次演示设置 `admin`、`applicant`、`reviewer`、`approver` 的临时统一密码，不回显；也可通过 `BOOTSTRAP_ADMIN_PASSWORD` 环境变量注入。打开 [本地工作台](http://127.0.0.1:5173)。演示数据库随进程结束清理，样例数据与正式业务数据分离。M1 默认不模拟，最终占用/释放需真实 M1 回执，页面会如实显示处理中。持久化开发环境见 [环境说明](infra/README.md)。
 
 ## M1 功能与本地验收
 
@@ -119,7 +122,8 @@ API、权限、历史筛选、统计口径和环境配置分别见[签到契约]
 - [M1-A阶段交付与文档索引](docs/handoffs/m1-a-delivery.md) · [续做手册](docs/handoffs/m1-a-resume.md)（当前状态、按负责人交接、延期项及上传安排）
 
 - [架构决策：单仓库与服务边界](docs/architecture/adr-0001-repository-and-services.md)
-- [M2 需求与待决规则](docs/requirements/m2.md)
+- [M2 需求与待决规则](docs/requirements/m2.md) · [M2 API](contracts/rooms-api.md) · [M1 占用契约](contracts/m2-occupancy-api.md)
+- [M2 验证与待验收记录](docs/process/m2-validation.md)
 - [M1 需求评审稿](docs/requirements/m1.md) · [并发方案 B](docs/architecture/adr-0003-m1-concurrency.md) · [评审包](docs/process/m1-review.md)
 - [M1 核心规则与验证](docs/process/m1-core-validation.md) · [M1-B 实现范围与协作边界](docs/requirements/m1-b.md) · [M1-B 接入说明书](docs/handoffs/m1-b.md)
 - [M1 内部座位查询方案](docs/architecture/m1-availability-plan.md) · [80测试与查询复验](docs/process/m1-availability-validation.md)（完整D/M2/M3集成仍待进行）

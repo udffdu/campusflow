@@ -27,11 +27,42 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+  rooms-postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: campusflow_rooms
+      POSTGRES_USER: campusflow_rooms
+      POSTGRES_PASSWORD: ${ROOMS_DATABASE_PASSWORD:?Set a separate ROOMS_DATABASE_PASSWORD}
+    volumes:
+      - rooms-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campusflow_rooms -d campusflow_rooms"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  rooms:
+    build: ../services/rooms
+    environment:
+      ROOMS_DATABASE_URL: jdbc:postgresql://rooms-postgres:5432/campusflow_rooms
+      ROOMS_DATABASE_USER: campusflow_rooms
+      ROOMS_DATABASE_PASSWORD: ${ROOMS_DATABASE_PASSWORD:?Set ROOMS_DATABASE_PASSWORD}
+      PLATFORM_URL: http://platform:8080
+      M2_SERVICE_KEY: ${M2_SERVICE_KEY:?Set M2_SERVICE_KEY}
+      M1_URL: ${M1_URL:-http://seats:8081}
+      M2_OCCUPANCY_KEY: ${M2_OCCUPANCY_KEY:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    depends_on:
+      rooms-postgres:
+        condition: service_healthy
+      platform:
+        condition: service_started
   web:
     build: ../apps/web
     ports:
       - "127.0.0.1:8088:80"
     depends_on:
       - platform
+      - rooms
 volumes:
   postgres-data:
+  rooms-postgres-data:
