@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { can, loadSession, session } from './session'
+import ReportView from './views/ReportView.vue'
+import MyReportsView from './views/MyReportsView.vue'
 import LoginView from './views/LoginView.vue'
 import OverviewView from './views/OverviewView.vue'
 import ResourcesView from './views/ResourcesView.vue'
@@ -9,6 +11,9 @@ import DeliveriesView from './views/DeliveriesView.vue'
 import AuditView from './views/AuditView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 export const router = createRouter({ history: createWebHistory(), routes: [
+  {path:'/maintenance/new',component:ReportView,meta:{title:'故障报修',permission:'maintenance.report'}},
+  {path:'/maintenance',component:MyReportsView,meta:{title:'本人报修',permission:'maintenance.read.own'}},
+  {path:'/maintenance/:id',component:MyReportsView,meta:{title:'报修详情',permission:'maintenance.read.own'}},
   {path:'/login', component:LoginView, meta:{title:'登录'}},
   {path:'/', component:OverviewView, meta:{title:'工作台'}},
   {path:'/resources', component:ResourcesView, meta:{title:'空间资源',permission:'spaces.read'}},

@@ -9,6 +9,8 @@ import Modal from './components/Modal.vue'
 const route = useRoute(); const router = useRouter(); const menuOpen = ref(false)
 const passwordOpen = ref(false); const currentPassword = ref(''); const newPassword = ref(''); const error = ref(''); const busy = ref(false)
 const navigation = computed(() => [
+  {path:'/maintenance/new',name:'故障报修',icon:'space',show:can('maintenance.report')},
+  {path:'/maintenance',name:'本人报修',icon:'audit',show:can('maintenance.read.own')},
   {path:'/',name:'工作台',icon:'grid',show:true}, {path:'/resources',name:'空间资源',icon:'space',show:can('spaces.read')},
   {path:'/notifications',name:'通知中心',icon:'bell',show:true},
   {path:'/users',name:'账号与权限',icon:'users',show:can('users.manage')},

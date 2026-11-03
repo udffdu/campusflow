@@ -277,14 +277,19 @@
         "无效会话、越权、无效房间及非法类型或描述被拒绝且无业务数据落库；具体字段限制见 docs/requirements/m3.md 待评审规则",
         "相同幂等键同内容重试返回同一工单，不同内容冲突；创建、历史和待发送事件原子提交"
       ],
-      "progress_note": "按最终Format规则重建任务1A；内部验证和人工验收见本阶段记录，真实D联调未完成。管理查询、人员选择、派单和独立历史接口尚未进入重建阶段。",
+      "progress_note": "重建1A内部验收通过并提交0be6fc9；1B页面已重建，19项前端测试、类型检查和生产构建通过，等待用户验收。真实D接入仍未完成；管理/派单未重建，baseline仍proposed。",
       "implementation": [
         "services/maintenance/src/main",
-        "docs/requirements/m3-reporting-decisions.md"
+        "docs/requirements/m3-reporting-decisions.md",
+        "apps/web/src/maintenance.ts",
+        "apps/web/src/views/ReportView.vue"
       ],
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
-        "docs/process/m3-rebuild-task1a-validation.md"
+        "docs/process/m3-rebuild-task1a-validation.md",
+        "apps/web/src/components/MaintenanceViews.test.ts",
+        "apps/web/src/maintenance.test.ts",
+        "docs/process/m3-rebuild-task1b-validation.md"
       ]
     },
     {
@@ -298,14 +303,19 @@
         "猜测他人工单 ID、修改筛选或分页不能越权；失效或停用账号被拒绝",
         "查询不泄露凭据或未授权用户资料，房间停用不删除历史工单；覆盖 docs/requirements/m3.md 中 R02 验收场景"
       ],
-      "progress_note": "按最终Format规则重建任务1A；内部验证和人工验收见本阶段记录，真实D联调未完成。管理查询、人员选择、派单和独立历史接口尚未进入重建阶段。",
+      "progress_note": "重建1A内部验收通过并提交0be6fc9；1B页面已重建，19项前端测试、类型检查和生产构建通过，等待用户验收。真实D接入仍未完成；管理/派单未重建，baseline仍proposed。",
       "implementation": [
         "services/maintenance/src/main",
-        "docs/requirements/m3-reporting-decisions.md"
+        "docs/requirements/m3-reporting-decisions.md",
+        "apps/web/src/maintenance.ts",
+        "apps/web/src/views/MyReportsView.vue"
       ],
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
-        "docs/process/m3-rebuild-task1a-validation.md"
+        "docs/process/m3-rebuild-task1a-validation.md",
+        "apps/web/src/components/MaintenanceViews.test.ts",
+        "apps/web/src/maintenance.test.ts",
+        "docs/process/m3-rebuild-task1b-validation.md"
       ]
     },
     {
