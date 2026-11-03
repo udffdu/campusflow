@@ -1,0 +1,17 @@
+AGENTS.md
+apps/web/README.md
+apps/web/src/App.vue
+apps/web/src/components/ManagementView.test.ts
+apps/web/src/router.ts
+apps/web/src/views/ManagementView.vue
+docs/process/m3-management-task1-validation.md
+docs/process/m3-rebuild-management-task1-files.txt
+docs/process/m3-rebuild-management-task1-validation.md
+docs/process/m3-reconstruction-plan.md
+docs/requirements/m3-d-capability-requests.md
+services/maintenance/README.md
+services/maintenance/src/main/java/io/campusflow/maintenance/Management.java
+services/maintenance/src/main/java/io/campusflow/maintenance/ManagementApi.java
+services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java
+spec/m3-context.json
+spec/requirements.json

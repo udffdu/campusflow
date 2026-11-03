@@ -22,7 +22,7 @@ import org.flywaydb.core.Flyway;
 @SpringBootTest
 @AutoConfigureMockMvc
 class ReportingTest {
-    static final UUID A=UUID.randomUUID(),B=UUID.randomUUID(),DEP=UUID.randomUUID(),ROOM=UUID.randomUUID();
+    static final UUID A=UUID.randomUUID(),B=UUID.randomUUID(),DEP=UUID.randomUUID(),DEP_B=UUID.randomUUID(),ROOM=UUID.randomUUID();
     static final String KEY=UUID.randomUUID().toString();
     static final ObjectMapper JSON=new ObjectMapper();
     static final EmbeddedPostgres PG=startPg();
@@ -42,8 +42,9 @@ class ReportingTest {
                     if(token.equals("expired")) body=Map.of("allowed",false);
                     else {
                         boolean allowed=!token.equals("denied") && Set.of("maintenance.report","maintenance.read.own").contains(req.path("permission").asText());
+                        if(req.path("permission").asText().equals("maintenance.read.scope")) allowed=Set.of("manager","managerB","global").contains(token);
                         if(mode.equals("scope") && req.has("departmentId")) allowed=false;
-                        body=Map.of("allowed",allowed,"identity",Map.of("id",token.equals("B")?B:A,"departmentId",DEP,"active",true,"roles",List.of(token.equals("global")?"ADMIN":"MEMBER")));
+                        body=Map.of("allowed",allowed,"identity",Map.of("id",token.equals("B")?B:A,"departmentId",token.equals("managerB")?DEP_B:DEP,"active",true,"roles",List.of(token.equals("global")||token.equals("adminWithoutPermission")?"ADMIN":"MEMBER")));
                     }
                 } else if(mode.equals("missing")) { status=404;body=Map.of(); }
                 else body=Map.of("id",ROOM,"departmentId",mode.equals("scope")?UUID.randomUUID():DEP,"type",mode.equals("seat")?"SEAT":"ROOM","effectiveActive",!mode.equals("inactive"),"version",1);
@@ -174,6 +175,67 @@ class ReportingTest {
         create("A","a._:-9",input("broken lamp")).andExpect(status().isCreated());
         create("B","a._:-9",input("broken lamp")).andExpect(status().isCreated());
         assertThat(count("work_orders")).isEqualTo(2);
+    }
+    static final String MANAGEMENT="/api/v1/maintenance/management/work-orders";
+    UUID seedManaged(UUID department,String text) {
+        UUID id=UUID.randomUUID();
+        db.update("insert into work_orders(id,reporter_id,room_id,department_id,resource_version,fault_type,description,status,created_at) values(?,?,?,?,?,?,?,?,?)",id,B,ROOM,department,1,"OTHER",text,"PENDING_DISPATCH",java.sql.Timestamp.from(java.time.Instant.now()));return id;
+    }
+    @Test void managementScopePaginationAndPrivacy() throws Exception {
+        UUID own=seedManaged(DEP,"private description "+"x".repeat(200));UUID foreign=seedManaged(UUID.randomUUID(),"foreign secret");seedManaged(DEP,"second own report");
+        var result=node(mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager")).param("status","PENDING_DISPATCH").param("size","1")).andExpect(status().isOk()));
+        assertThat(result.path("total").asInt()).isEqualTo(2);assertThat(result.path("items").size()).isEqualTo(1);
+        assertThat(result.toString()).doesNotContain("foreign secret","reporterId","actorId","departmentId","history");
+        var second=node(mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager")).param("page","1").param("size","1")).andExpect(status().isOk()));
+        assertThat(second.path("items").get(0).path("id").asText()).isNotEqualTo(result.path("items").get(0).path("id").asText());
+        var detail=node(mvc.perform(get(MANAGEMENT+"/"+own).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()));
+        assertThat(detail.path("description").asText()).hasSize(220);assertThat(detail.has("reporterId")).isFalse();assertThat(detail.path("assigneeId").isNull()).isTrue();
+        mvc.perform(get(MANAGEMENT+"/"+foreign).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isNotFound());
+        mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","global"))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(3));
+        mvc.perform(get(MANAGEMENT+"/"+foreign).cookie(new Cookie("CF_SESSION","global"))).andExpect(status().isOk()).andExpect(jsonPath("$.id").value(foreign.toString()));
+    }
+    @Test void managementDeniedAndInvalidRequests() throws Exception {
+        UUID id=seedManaged(DEP,"existing report");
+        for(String token:List.of("A","adminWithoutPermission","expired")) {
+            int expected=token.equals("expired")?401:403;
+            mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION",token))).andExpect(status().is(expected));
+            mvc.perform(get(MANAGEMENT+"/"+id).cookie(new Cookie("CF_SESSION",token))).andExpect(status().is(expected));
+        }
+        mvc.perform(get(MANAGEMENT)).andExpect(status().isUnauthorized());
+        for(var params:List.of(Map.of("departmentId",DEP.toString()),Map.of("actorId",A.toString()),Map.of("status","INVALID"),Map.of("page","-1"),Map.of("size","101"))) {
+            var req=get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager"));params.forEach(req::param);mvc.perform(req).andExpect(status().isBadRequest());
+        }
+        mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager")).param("status","PENDING_DISPATCH","PENDING_DISPATCH")).andExpect(status().isBadRequest());
+        mode="down";mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isServiceUnavailable());
+        assertThat(count("work_orders")).isEqualTo(1);
+    }
+    @Test void managementEmptyAndStableOrder() throws Exception {
+        mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0)).andExpect(jsonPath("$.items.length()").value(0));
+        UUID one=seedManaged(DEP,"first report"),two=seedManaged(DEP,"second report");
+        db.update("update work_orders set created_at=?",java.sql.Timestamp.from(java.time.Instant.parse("2026-11-02T00:00:00Z")));
+        var expected=db.queryForList("select id from work_orders where department_id=? order by created_at desc,id desc",UUID.class,DEP);
+        var response=node(mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()));
+        assertThat(response.path("items").get(0).path("id").asText()).isEqualTo(expected.getFirst().toString());
+        assertThat(response.path("items").get(1).path("id").asText()).isEqualTo(expected.getLast().toString());
+    }
+    @Test void managementBothDepartmentsAndMinimalProjection() throws Exception {
+        UUID a=seedManaged(DEP,"a".repeat(200)),b=seedManaged(DEP_B,"second department");
+        var second=node(mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","managerB"))
+            .param("status","PENDING_DISPATCH")).andExpect(status().isOk()));
+        assertThat(second.path("total").asInt()).isEqualTo(1);
+        assertThat(second.path("items").get(0).path("id").asText()).isEqualTo(b.toString());
+        mvc.perform(get(MANAGEMENT+"/"+a).cookie(new Cookie("CF_SESSION","managerB"))).andExpect(status().isNotFound());
+        var first=node(mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()));
+        assertThat(first.path("items").get(0).path("description").asText()).hasSize(120);
+        var detail=node(mvc.perform(get(MANAGEMENT+"/"+a).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk()));
+        Set<String> fields=new HashSet<>();detail.fieldNames().forEachRemaining(fields::add);
+        assertThat(fields).containsExactlyInAnyOrder("id","roomId","faultType","description","status","createdAt","assigneeId","dispatcherId","assignedAt","updatedAt","version");
+        assertThat(detail.path("version").asInt()).isEqualTo(1);
+        assertThat(detail.path("description").asText()).hasSize(200);
+        assertThat(detail.toString()).doesNotContain("reporterId","departmentId","actorId","history","password","token");
+        mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager")).param("status","ASSIGNED")).andExpect(status().isBadRequest());
+        mode="inactive"; // Historical queries do not require the room to remain active.
+        mvc.perform(get(MANAGEMENT+"/"+a).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk());
     }
     @Test void G_emptyMigrationAndRepeat() {
         String schema="migration_"+UUID.randomUUID().toString().replace("-","");

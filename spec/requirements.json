@@ -277,7 +277,7 @@
         "无效会话、越权、无效房间及非法类型或描述被拒绝且无业务数据落库；具体字段限制见 docs/requirements/m3.md 待评审规则",
         "相同幂等键同内容重试返回同一工单，不同内容冲突；创建、历史和待发送事件原子提交"
       ],
-      "progress_note": "重建1A内部验收通过并提交0be6fc9；1B页面已重建，19项前端测试、类型检查和生产构建通过，等待用户验收。真实D接入仍未完成；管理/派单未重建，baseline仍proposed。",
+      "progress_note": "1A/1B内部重建已由用户验收并本地提交0be6fc9/2459c2a。真实D联调仍未完成，baseline保持proposed。",
       "implementation": [
         "services/maintenance/src/main",
         "docs/requirements/m3-reporting-decisions.md",
@@ -297,25 +297,30 @@
       "module": "M3",
       "title": "工单查询与数据范围",
       "baseline_status": "proposed",
-      "status": "in_progress",
+      "status": "implemented",
       "acceptance": [
         "报修人仅能分页查询本人记录和详情，管理员仅查询授权范围，列表统计也不得泄露其他范围数据",
         "猜测他人工单 ID、修改筛选或分页不能越权；失效或停用账号被拒绝",
         "查询不泄露凭据或未授权用户资料，房间停用不删除历史工单；覆盖 docs/requirements/m3.md 中 R02 验收场景"
       ],
-      "progress_note": "重建1A内部验收通过并提交0be6fc9；1B页面已重建，19项前端测试、类型检查和生产构建通过，等待用户验收。真实D接入仍未完成；管理/派单未重建，baseline仍proposed。",
+      "progress_note": "1A/1B已验收提交；管理列表/详情已按最终规则重建，本阶段后端14项/前端24项及类型构建通过，待用户验收；真实D联调、独立历史接口/页面尚未完成。",
       "implementation": [
         "services/maintenance/src/main",
         "docs/requirements/m3-reporting-decisions.md",
         "apps/web/src/maintenance.ts",
-        "apps/web/src/views/MyReportsView.vue"
+        "apps/web/src/views/MyReportsView.vue",
+        "services/maintenance/src/main/java/io/campusflow/maintenance/Management.java",
+        "services/maintenance/src/main/java/io/campusflow/maintenance/ManagementApi.java",
+        "apps/web/src/views/ManagementView.vue"
       ],
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
         "docs/process/m3-rebuild-task1a-validation.md",
         "apps/web/src/components/MaintenanceViews.test.ts",
         "apps/web/src/maintenance.test.ts",
-        "docs/process/m3-rebuild-task1b-validation.md"
+        "docs/process/m3-rebuild-task1b-validation.md",
+        "apps/web/src/components/ManagementView.test.ts",
+        "docs/process/m3-rebuild-management-task1-validation.md"
       ]
     },
     {

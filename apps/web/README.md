@@ -9,3 +9,5 @@
 具备权限导航、加载/错误/空态、分页、版本冲突反馈和窄屏导航。后端执行最终授权。正式静态构建由 Nginx 同源代理 API，内部接口不经网页入口暴露。
 
 M3重建验收记录见 [任务1B](../../docs/process/m3-rebuild-task1b-validation.md)。只有D/入口负责人确认代理及独立CSRF并验证路由后才能设置 VITE_M3_INTEGRATION_APPROVED=true；当前不得仅打开开关。原D登录和CSRF保持不变。
+
+重建任务1新增受权管理列表与详情，见 [验收记录](../../docs/process/m3-rebuild-management-task1-validation.md)。候选、派单和历史展示尚未进入当前重建阶段。
