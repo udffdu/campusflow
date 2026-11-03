@@ -1,0 +1,46 @@
+server:
+  address: ${M1_ADDRESS:127.0.0.1}
+  port: ${M1_PORT:8081}
+  error:
+    include-message: never
+    include-stacktrace: never
+spring:
+  application:
+    name: campusflow-seats
+  datasource:
+    url: ${M1_DATABASE_URL}
+    username: ${M1_DATABASE_USER}
+    password: ${M1_DATABASE_PASSWORD:}
+    hikari:
+      connection-timeout: 2000
+  flyway:
+    schemas: m1
+    default-schema: m1
+m1:
+  write-enabled: ${M1_WRITE_ENABLED:false}
+  browser-origin: ${M1_BROWSER_ORIGIN:}
+  csrf-secret: ${M1_CSRF_SECRET:}
+  checkin-secret: ${M1_CHECKIN_SECRET:}
+  advance-mode: ${M1_ADVANCE_MODE:CALENDAR_DAYS}
+  d-base-url: ${M1_D_BASE_URL}
+  service-key: ${M1_SERVICE_KEY}
+  max-advance: ${M1_MAX_ADVANCE}
+  max-duration: ${M1_MAX_DURATION}
+  connect-timeout: ${M1_CONNECT_TIMEOUT:PT1S}
+  read-timeout: ${M1_READ_TIMEOUT:PT2S}
+  call-budget: ${M1_CALL_BUDGET:PT3S}
+  max-pages: ${M1_MAX_PAGES:100}
+  reminders:
+    enabled: ${M1_REMINDERS_ENABLED:false}
+    delay: ${M1_REMINDER_DELAY:PT30S}
+    initial-delay: ${M1_REMINDER_INITIAL_DELAY:PT5S}
+    lease: ${M1_REMINDER_LEASE:PT1M}
+    retry-base: ${M1_REMINDER_RETRY_BASE:PT5S}
+    retry-max: ${M1_REMINDER_RETRY_MAX:PT5M}
+    scan-limit: ${M1_REMINDER_SCAN_LIMIT:200}
+    delivery-limit: ${M1_REMINDER_DELIVERY_LIMIT:25}
+  lifecycle:
+    enabled: ${M1_LIFECYCLE_ENABLED:false}
+    delay: ${M1_LIFECYCLE_DELAY:PT30S}
+    initial-delay: ${M1_LIFECYCLE_INITIAL_DELAY:PT5S}
+    scan-limit: ${M1_LIFECYCLE_SCAN_LIMIT:200}

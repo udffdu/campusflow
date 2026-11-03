@@ -1,0 +1,807 @@
+{
+  "module": "M1",
+  "updated_at": "2026-10-30",
+  "status": "review_draft",
+  "workstreams": [
+    {
+      "id": "A",
+      "owner": "leafwhisper286",
+      "scope": [
+        "查询",
+        "预约",
+        "历史复用",
+        "统一占用与M2/M3对接"
+      ]
+    },
+    {
+      "id": "B",
+      "owner": null,
+      "scope": [
+        "签到",
+        "提醒",
+        "违约",
+        "运营查询"
+      ]
+    }
+  ],
+  "reviewer": null,
+  "collaboration": {
+    "delivery": "各自负责所认领功能的前后端和测试",
+    "review": "交叉评审",
+    "status": "user_confirmed",
+    "other_member_review_evidence": null,
+    "m1_internal_decision_owner": "leafwhisper286",
+    "b_handoff": "after_a_complete",
+    "b_review_is_current_prerequisite": false,
+    "decision_recorded_at": "2026-10-28"
+  },
+  "user_confirmed_rules": {
+    "max_advance": {
+      "value": 1,
+      "unit": "day",
+      "configurable": true,
+      "confirmed_at": "2026-10-27",
+      "interpretation": "CALENDAR_DAYS",
+      "interpretation_confirmed_at": "2026-10-29",
+      "interpretation_statement": "按自然日：允许预约到明天结束前的时段",
+      "applies_to": "startAt local date in Asia/Shanghai; not earlier than now",
+      "latest_start_date_offset_days": 1
+    },
+    "user_overlap": {
+      "overlapping_effective_reservations_allowed": false,
+      "non_overlapping_different_seats_allowed": true,
+      "confirmed_at": "2026-10-27"
+    },
+    "existing_personal_vs_m2": {
+      "preserve_existing_personal_reservation": true,
+      "conflicting_m2_occupancy_rejected": true,
+      "m2_review": "pending"
+    },
+    "reservation_states": {
+      "values": [
+        "CONFIRMED",
+        "CHECKED_IN",
+        "COMPLETED",
+        "NO_SHOW",
+        "DISRUPTED"
+      ],
+      "confirmed_by": "leafwhisper286",
+      "confirmed_at": "2026-10-28",
+      "b_personally_approved": false
+    }
+  },
+  "concurrency": {
+    "choice": "B",
+    "description": "按用户和教室取得数据库事务锁，全部相关写入遵守统一顺序",
+    "selected_by": "leafwhisper286",
+    "selected_at": "2026-10-28",
+    "affected_owner_review": "M1内部由用户决定，D/M2/M3相关接口和其schema仍待受影响方评审",
+    "implementation_status": "personal_reservations_implemented_and_locally_tested; M2/M3 not integrated",
+    "adr": "docs/architecture/adr-0003-m1-concurrency.md"
+  },
+  "proposed_details": {
+    "max_advance_interpretation": {
+      "hours": 24,
+      "rolling": true,
+      "applies_to": "startAt",
+      "upper_bound_inclusive": true,
+      "status": "historical rolling proposal superseded for ordinary application by user-confirmed CALENDAR_DAYS on 2026-10-29; legacy demos explicitly retain rolling"
+    },
+    "interval": "[startAt,endAt)",
+    "timezone": "Asia/Shanghai",
+    "max_duration_hours_default": 4,
+    "config_management_owner": null,
+    "checkin_window": null,
+    "student_cancellation_policy": null
+  },
+  "dependency_reviews": [
+    {
+      "owner": "M1-B",
+      "subject": "预约状态、字段、版本、锁顺序、签到超时竞态、释放和免违约",
+      "status": "handoff_deferred_by_user",
+      "decision_owner": "leafwhisper286",
+      "reason": "用户决定M1内部设计，A完成后再向B提供说明书，不要求当前先取得B确认"
+    },
+    {
+      "owner": "D",
+      "subject": "M1业务权限与角色、全校/院系访问范围、插座属性、主数据变更竞态、配置管理、站内信/邮件通知渠道、服务凭据和CSRF",
+      "status": "three_supplements_and_reminder_email_extension_implemented_under_user_authorization; owner_review_and_other_boundaries_pending",
+      "proposal": "docs/process/m1-d-integration-review.md",
+      "repository_inspection": {
+        "checked_at": "2026-10-28",
+        "main_commit": "9c98d43265d3b8303dc982e72a5b69ee423cc057",
+        "existing_contract": "contracts/platform-api.md",
+        "pr_url": "https://github.com/udffdu/campusflow/pull/2",
+        "existing_base_contract_found": true,
+        "supplemental_m1_decisions_found": false,
+        "affected_owner_approval_recorded": false
+      },
+      "implementation_authority": "d_supplement_authorization",
+      "remaining_subjects": [
+        "真实网络身份/主数据适配",
+        "主数据变更在途/已有预约边界",
+        "午夜开放表示",
+        "M1路由和CSRF",
+        "配置归属",
+        "真实SMTP服务商接收、退信/限流和密钥运维验收",
+        "D负责人对V4邮箱字段及邮件端点评审"
+      ]
+    },
+    {
+      "owner": "M2",
+      "subject": "保留已有个人预约、占用失败的审批状态、网络超时查询及重复/乱序请求",
+      "status": "pending"
+    },
+    {
+      "owner": "M3",
+      "subject": "来源独立解除、已有预约处置和免违约",
+      "status": "pending"
+    }
+  ],
+  "documents": {
+    "requirements": "docs/requirements/m1.md",
+    "review": "docs/process/m1-review.md",
+    "handoff": "docs/handoffs/m1-b.md",
+    "storage_design": "docs/architecture/m1-storage.md",
+    "storage_validation": "docs/process/m1-storage-validation.md",
+    "availability_plan": "docs/architecture/m1-availability-plan.md",
+    "availability_validation": "docs/process/m1-availability-validation.md",
+    "d_integration_review": "docs/process/m1-d-integration-review.md",
+    "integration_handoff": "docs/handoffs/m1-integration.md",
+    "d_supplement_validation": "docs/process/m1-d-supplement-validation.md",
+    "http_query_plan": "docs/architecture/m1-http-query-plan.md",
+    "http_query_validation": "docs/process/m1-http-query-validation.md",
+    "query_api": "contracts/m1-query-api.md",
+    "reservation_submit_plan": "docs/architecture/m1-reservation-submit-plan.md",
+    "m1_a_boundary": "docs/requirements/m1-a-boundary.md",
+    "reservation_submit_validation": "docs/process/m1-reservation-submit-validation.md",
+    "reservation_demo_api": "contracts/m1-reservation-demo-api.md",
+    "reminder_api": "contracts/m1-reminder-api.md",
+    "reminder_validation": "docs/process/m1-reminder-validation.md"
+  },
+  "delivery": {
+    "implemented": false,
+    "human_acceptance": "core_store_query_and_d_supplements_local_build_test_reproduced; D corroborated_by_local_report",
+    "peer_review": "not_performed; M1-B handoff deferred by user",
+    "remote_ci": "not_run",
+    "core_rules": "implemented_and_locally_tested",
+    "reservation_store": "implemented_and_locally_tested",
+    "migrations": "M1 V1/V2/V3 and D V4 exercised only in local temporary PostgreSQL; not deployed",
+    "human_verification": {
+      "reported_by": "leafwhisper286",
+      "reported_finished_at": "2026-10-28T13:24:09+08:00",
+      "elapsed_seconds": 2.148,
+      "tests": 43,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "build": "SUCCESS",
+      "evidence": "用户提供Maven verify结果",
+      "scope": "本地核心规则和个人预约存储构建/测试复验",
+      "full_m1_acceptance": false,
+      "peer_review_completed": false,
+      "record": "docs/process/m1-storage-validation.md"
+    },
+    "availability_query": {
+      "status": "internal_partial_calculation_implemented_and_locally_tested",
+      "full_availability_api_implemented": false,
+      "human_verification": {
+        "reported_by": "leafwhisper286",
+        "reported_finished_at": "2026-10-28T14:20:20+08:00",
+        "elapsed_seconds": 3.113,
+        "tests": 80,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "build": "SUCCESS",
+        "evidence": "用户提供Maven verify结果",
+        "scope": "本地核心、存储及内部查询构建/测试复验",
+        "source_review_completed": false,
+        "full_m1_acceptance": false,
+        "peer_review_completed": false,
+        "record": "docs/process/m1-availability-validation.md"
+      },
+      "local_tests": {
+        "total": 80,
+        "original": 43,
+        "new_opening": 17,
+        "new_pg_query": 20,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "finished_at": "2026-10-28T14:02:51+08:00"
+      },
+      "mutation_experiments": {
+        "total": 6,
+        "all_detected": true,
+        "original_java_source_unchanged": true
+      },
+      "record": "docs/process/m1-availability-validation.md",
+      "pending": [
+        "D身份和业务权限/访问范围/主数据适配",
+        "跨午夜开放表示",
+        "M2/M3占用",
+        "HTTP与页面",
+        "创建时完整条件校验"
+      ],
+      "latest_followup": "delivery.d_supplements; original 80-test evidence retained for its historical stage"
+    },
+    "d_supplements": {
+      "status": "implemented_and_locally_tested",
+      "human_verification": {
+        "reported_by": "leafwhisper286",
+        "reported_on": "2026-10-28",
+        "seats": {
+          "tests": 86,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "build": "SUCCESS",
+          "reported_finished_at": "2026-10-28T16:05:32+08:00",
+          "maven_elapsed_seconds": 3.22,
+          "evidence": "用户提供终端输出"
+        },
+        "web": {
+          "test_files": 4,
+          "tests": 11,
+          "passed": 11,
+          "test_duration_ms": 365,
+          "typecheck": "passed",
+          "build": "passed",
+          "vite_build_ms": 82,
+          "evidence": "用户提供终端输出"
+        },
+        "platform_corroboration": {
+          "tests": 24,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "test_suite_seconds": 19.813,
+          "artifact_modified_at": "2026-10-28T16:05:27+08:00",
+          "artifact": "services/platform/target/surefire-reports/TEST-io.campusflow.platform.PlatformIntegrationTest.xml",
+          "evidence": "AI核对同次本地Surefire报告，原始报告不提交；用户消息未含D段日志",
+          "d_log_pasted_by_user": false
+        },
+        "source_review_completed": false,
+        "full_m1_acceptance": false,
+        "peer_review_completed": false,
+        "record": "docs/process/m1-d-supplement-validation.md"
+      },
+      "platform_tests": {
+        "total": 24,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "finished_at": "2026-10-28T15:16:47+08:00"
+      },
+      "seats_tests": {
+        "total": 86,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "finished_at": "2026-10-28T15:17:16+08:00"
+      },
+      "web_tests": {
+        "total": 11,
+        "passed": 11
+      },
+      "web_build": "passed",
+      "mutations": {
+        "seats": 9,
+        "platform": 3,
+        "all_detected": true,
+        "errors": 0,
+        "original_java_source_unchanged": true
+      },
+      "migration": "D V3; temporary PostgreSQL blank/V2-upgrade/replay verified; not deployed",
+      "full_http_or_network_integration": false,
+      "record": "docs/process/m1-d-supplement-validation.md",
+      "local_code_commits": [
+        {
+          "commit": "21ac46b",
+          "scope": "D permissions, metadata, V3 migration and integration tests"
+        },
+        {
+          "commit": "40f3ba0",
+          "scope": "resource and role UI; component tests"
+        },
+        {
+          "commit": "0322b01",
+          "scope": "M1 permission/scope/outlet rules and isolated mutation checks"
+        }
+      ]
+    }
+  },
+  "availability_stage": {
+    "scope": "M1内部开放计算和个人预约只读占用查询，分阶段接入",
+    "plan": "docs/architecture/m1-availability-plan.md",
+    "confirmed_by": "leafwhisper286",
+    "confirmed_at": "2026-10-28",
+    "evidence": "用户回复：我同意",
+    "affected_d_m2_m3_review_replaced": false
+  },
+  "d_supplement_authorization": {
+    "recorded_at": "2026-10-28",
+    "authorized_by": "leafwhisper286",
+    "evidence": "补充内容你直接增加即可，只需要在最后生成一份说明书告知其他部分的负责人。",
+    "scope": [
+      "三项个人预约权限和SEAT_USER",
+      "ROOM.bookingScope",
+      "SEAT.features的POWER_OUTLET",
+      "相关D迁移/API/管理界面和M1内部规则"
+    ],
+    "prior_d_review_required_for_these_supplements": false,
+    "d_personally_approved": false,
+    "other_owner_handoff": "document_for_user_to_forward_after_completion",
+    "other_pending_policies_approved": false
+  },
+  "http_query_stage": {
+    "status": "implemented_and_locally_tested; user_script_and_three_ui_checks_accepted",
+    "implementation_started": true,
+    "scope": [
+      "D现有API真实网络鉴权/主数据适配",
+      "M1有权教室列表和候选座位GET",
+      "Vue只读座位查询页面",
+      "独立联调与真实网络测试"
+    ],
+    "user_confirmation": {
+      "by": "leafwhisper286",
+      "at": "2026-10-28",
+      "response": "同意",
+      "other_owners_approved": false
+    },
+    "plan": "docs/architecture/m1-http-query-plan.md",
+    "reservation_writes_in_scope": false,
+    "d_contract_changes_in_scope": false,
+    "existing_demo_replacement_in_scope": false,
+    "full_availability_claim_allowed": false,
+    "other_pending_policies_approved": false,
+    "validation": "docs/process/m1-http-query-validation.md",
+    "local_results": {
+      "platform_tests": 24,
+      "seats_tests": 123,
+      "web_tests": 22,
+      "real_tcp_checks": 28,
+      "browser": "passed; local Chrome through actual Vite/D/M1",
+      "mutations": 6
+    },
+    "human_acceptance": "script_reproduced_and_three_requested_ui_checks_confirmed; Network_observation_not_reported",
+    "committed": true,
+    "remote_ci": "not_run",
+    "deployment": "not_done",
+    "human_script_verification": {
+      "recorded_at": "2026-10-28",
+      "provided_output_finished_at": "2026-10-28T17:29:45+08:00",
+      "explicit_user_output": [
+        "classpath preparation BUILD SUCCESS (0.412s, not full test duration)",
+        "28 real TCP checks passed",
+        "browser_checked=false",
+        "repository register: 4 modules / 27 requirements passed"
+      ],
+      "local_report_corroboration": {
+        "D": {
+          "tests": 24,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "mtime": "2026-10-28T17:29:31+08:00"
+        },
+        "M1": {
+          "tests": 123,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "mtime_range": [
+            "2026-10-28T17:29:34+08:00",
+            "2026-10-28T17:29:39+08:00"
+          ]
+        }
+      },
+      "web_test_build": "successful command flow inferred from set-e script reaching completion; frontend output not pasted",
+      "user_browser_acceptance": false,
+      "other_owner_approval": false
+    },
+    "human_ui_verification": {
+      "recorded_at": "2026-10-28",
+      "confirmed_by": "leafwhisper286",
+      "response": "一切正常",
+      "confirmed_checks": [
+        "A101 future whole-hour one-hour query returns 4 candidates",
+        "POWER_OUTLET filter returns 1 candidate",
+        "read-only notice visible; no reservation submit button"
+      ],
+      "network_observation_confirmed": false,
+      "manager_switch_confirmed": false,
+      "source_code_line_review_confirmed": false,
+      "other_owner_approval": false,
+      "full_m1_acceptance": false
+    },
+    "implementation_commits": [
+      "a963a37",
+      "3a85fd0"
+    ],
+    "documentation_commit_reference": "git log: docs(m1) [CF-M1-001][CF-M1-012] record read-only query acceptance"
+  },
+  "reservation_submit_stage": {
+    "status": "implemented_and_ai_locally_tested; user_script_and_three_ui_checks_confirmed",
+    "implementation_started": true,
+    "user_confirmation": {
+      "by": "leafwhisper286",
+      "at": "2026-10-28",
+      "instruction": "请你阅读任务书，再次确认任务边界，我只负责M1-A部分，和M1-B，M2，M3区分开。然后我们进行下一步",
+      "interpretation": "continue previously presented isolated M1-A reservation plan after boundary recheck; not other module business or production release approval"
+    },
+    "plan": "docs/architecture/m1-reservation-submit-plan.md",
+    "recommended_mode": "isolated_personal_demo_only",
+    "proposed_scope": [
+      "CSRF and origin protection owned by M1",
+      "D-authenticated personal creation inside existing user/room lock protocol",
+      "same-intent request replay and unknown-result recovery",
+      "own single-record read and demo UI"
+    ],
+    "production_writes_authorized": false,
+    "new_d_api_or_schema_changes_proposed": false,
+    "new_m1_migration_expected": false,
+    "m2_m3_contracts_approved": false,
+    "formal_rolling_24_hour_policy_approved": false,
+    "d_stop_race_policy_approved": false,
+    "existing_demo_restart_authorized": false,
+    "new_test_results": {
+      "seats": 141,
+      "web": 33,
+      "real_read_tcp_regression": 28,
+      "real_submission_tcp": 32,
+      "mutations": 7,
+      "new_browser_ui": "user confirmed three requested UI checks; no AI real-browser claim from component/API tests",
+      "D24": "prior evidence retained; no D Java changes"
+    },
+    "validation": "docs/process/m1-reservation-submit-validation.md",
+    "human_acceptance": "user_script_reproduced_and_three_requested_ui_checks_confirmed; source_line_review_and_Network_observation_not_reported",
+    "human_ui_verification": {
+      "at": "2026-10-28",
+      "by": "leafwhisper286",
+      "statement": "三项结果全部通过",
+      "checks": [
+        "demo creation displays saved CONFIRMED reservation and ID",
+        "refresh own record retains same ID",
+        "same-period query reports own effective reservation conflict"
+      ],
+      "scope": "isolated M1-A personal demo only; not complete M1 acceptance or other owner review"
+    },
+    "human_script_verification": {
+      "at": "2026-10-28T22:08:36+08:00",
+      "user_reported_real_read_tcp": 28,
+      "user_reported_real_submission_tcp": 32,
+      "user_reported_repository_check": "passed; 4 modules, 27 requirements",
+      "seats_local_report_corroboration": "141 tests; zero failures/errors/skips; report mtimes 22:08:25-22:08:31+08:00",
+      "web": "set-e script completion supports test/build success; count not explicitly pasted by user",
+      "classpath_duration_seconds": 0.439,
+      "duration_scope": "classpath preparation only; not test suite duration",
+      "d_tests": "not rerun; prior D24 evidence retained",
+      "browser_checked": false
+    },
+    "committed": true,
+    "implementation_commits": {
+      "backend_and_network": "a81b39a",
+      "web": "3defbec"
+    },
+    "remote_ci": "not_run",
+    "deployment": "not_done",
+    "complete_history_list": false,
+    "repeat_booking_from_history": false,
+    "other_business_implemented": false
+  },
+  "history_stage": {
+    "status": "user_script_history_ui_and_hour_picker_confirmed",
+    "requirement": "CF-M1-006",
+    "user_confirmation": {
+      "by": "leafwhisper286",
+      "at": "2026-10-28",
+      "instruction": "请继续完成",
+      "context": "after presentation of own history, reuse original room/seat, choose new times and revalidate"
+    },
+    "plan": "docs/architecture/m1-history-plan.md",
+    "contract": "contracts/m1-history-api.md",
+    "validation": "docs/process/m1-history-validation.md",
+    "implemented": [
+      "owner-scoped all-state cursor history; default 20 max 50",
+      "read-own and current query/resource validation for repeat context",
+      "my-reservations page and read-own-only landing",
+      "clear old times; requery original seat; new protected request preserves original",
+      "pending-result protection and stale user response discard"
+    ],
+    "new_test_results": {
+      "seats": 157,
+      "web": 46,
+      "web_files": 9,
+      "real_read_tcp_regression": 28,
+      "real_submission_and_history_tcp": 48,
+      "mutations": 4,
+      "original_java_unchanged_during_mutations": true,
+      "ai_browser_checked": false,
+      "D24": "prior evidence retained; not rerun"
+    },
+    "new_schema_or_dependencies": false,
+    "new_D_api_or_code": false,
+    "production_writes_authorized": false,
+    "other_module_business_implemented": false,
+    "formal_rolling_24_hour_policy_approved": false,
+    "d_stop_race_policy_approved": false,
+    "m2_m3_contracts_approved": false,
+    "human_acceptance": "user_script_and_three_history_repeat_ui_observations_confirmed; hour_controls_and_labels_accepted_on_continue",
+    "committed": true,
+    "remote_ci": "not_run",
+    "deployment": "not_done",
+    "own_history_list": "implemented; requested user UI observations confirmed",
+    "repeat_booking": "isolated personal demo; requested user UI observations confirmed",
+    "remaining": [
+      "M1-side M2/M3 occupancy sources",
+      "formal configuration and advance-window interpretation",
+      "cross-service D disable race",
+      "B lifecycle business stays with B"
+    ],
+    "human_script_verification": {
+      "at": "2026-10-28T23:41:27+08:00",
+      "user_reported_real_read_tcp": 28,
+      "user_reported_real_submission_and_history_tcp": 48,
+      "user_reported_repository_check": "passed; 4 modules, 27 requirements",
+      "seats_local_report_corroboration": "157 tests; zero failures/errors/skips; report mtimes 23:41:17-23:41:23+08:00",
+      "web": "set-e completion supports test/build success; count not explicitly pasted by user",
+      "classpath_duration_seconds": 0.416,
+      "duration_scope": "classpath preparation only; not test suite duration",
+      "d_tests": "not rerun; prior D24 retained",
+      "browser_checked": false
+    },
+    "existing_demo_restarted_by_ai": false,
+    "anonymous_route_observation": {
+      "url": "http://localhost:5274/api/m1/v1/reservations?size=1",
+      "status": 401,
+      "scope": "new history route responds; no cookies/owner data read; not browser or human UI acceptance"
+    },
+    "human_ui_verification": {
+      "at": "2026-10-28",
+      "by": "leafwhisper286",
+      "statement": "结果正常，但是我发现一个小问题，就是在选择时间的时候，如果起止时间不是整点就无法填入，这是预设的规则吗？如果是预设规则的话，为什么不把“分钟”选择删除只保留“小时”呢？",
+      "scope": "three prior history/repeat UI observations confirmed; minute selector feedback tracked separately; no source/Network/other owner review claim"
+    },
+    "hour_picker_followup": {
+      "requirement": "CF-M1-002",
+      "mode": "separate start/end dates and 00..23 hour selects; minutes fixed 00",
+      "business_rule_changed": false,
+      "backend_changed": false,
+      "tests": 46,
+      "test_files": 9,
+      "typecheck_and_build": "passed; 121ms build",
+      "ai_browser_check": "real existing 5274 seat-query UI; date 2026-10-29 and hours 14 to 15 selected; all four controls valid; no query/POST submitted",
+      "human_acceptance": "2026-10-29 user accepted adjustment and continued",
+      "committed": true,
+      "user_response": {
+        "at": "2026-10-29",
+        "statement": "好的，我们进行下一步吧",
+        "interpretation": "accept latest hour-control/label adjustment and continue; not source/Network review or complete M1 acceptance"
+      }
+    },
+    "implementation_commits": {
+      "backend_and_network": "dbead3f",
+      "web_history_repeat_and_hour_controls": "8a4748e"
+    }
+  },
+  "external_occupancy_stage": {
+    "status": "deferred_by_user; draft_rules_and_review_materials_retained",
+    "requirement": "CF-M1-005",
+    "plan": "docs/architecture/m1-external-occupancy-plan.md",
+    "started_at": "2026-10-29",
+    "scope": "M1 side only: source ledger, independent release, availability and atomic personal-create checks, authenticated internal receive/recovery",
+    "implementation_started": false,
+    "new_migration_written": false,
+    "production_write_release_approved": false,
+    "m2_m3_contracts_approved": false,
+    "other_owner_review": "pending; M2 dianashiba per four GitHub documents; user confirms M3 owner not yet determined",
+    "new_tests": "not_run; documentation only; previous passed source unchanged",
+    "unresolved": [
+      "M3 affected reservation/time range, transition and notification timing, exemption coordination",
+      "service authorization and resource scope",
+      "operation version/result semantics and reactivation",
+      "M1 V2 schema and all effective writer lock protocol"
+    ],
+    "user_work": "M3 owner not determined: no immediate contact required; retain handoff, later coordinate real affected-owner review",
+    "ai_work": "prepare concrete review materials; implement and validate within confirmed scope after review",
+    "b_handoff": "still deferred until A completion; no early B contact required",
+    "other_business_implemented": false,
+    "committed": false,
+    "messages_sent": false,
+    "review_packet": "docs/process/m1-external-occupancy-review.md",
+    "repair_principle": {
+      "by": "leafwhisper286",
+      "at": "2026-10-29",
+      "statement": "我同意",
+      "approved_as": "proposal for M3 review",
+      "details": [
+        "preserve historical record of reservations necessarily terminated by maintenance",
+        "use DISRUPTED and exempt student violation",
+        "do not automatically revive terminated bookings after repair release"
+      ],
+      "m3_owner_approved": false,
+      "affected_time_range_and_transition_timing": "pending"
+    },
+    "m3_owner_arrangement": {
+      "at": "2026-10-29",
+      "user_statement": "M3负责任人尚未确定，是否可以先写入M1-A给其他部分的规则/说明书",
+      "owner": null,
+      "action": "maintain unified handoff rules now; real review after owner determined; no current M3 contact required",
+      "contract_or_schema_approval": false
+    },
+    "repository_inspection": {
+      "at": "2026-10-29",
+      "via": "GitHub connector read-only",
+      "ref": "main at request time; no full repository/PR/Issue claim",
+      "files": [
+        "spec/project.json",
+        "services/maintenance/README.md",
+        "docs/requirements/m2.md",
+        "contracts/README.md"
+      ],
+      "m3_owner_registered": false,
+      "messages_or_remote_mutations": false
+    },
+    "deferral": {
+      "at": "2026-10-29",
+      "instruction": "cross-module confirmation/integration later; ordinary personal booking first",
+      "implementation_approved": false,
+      "notes": "deferral does not claim complete occupancy checks or other-owner approval"
+    }
+  },
+  "reminder_stage": {
+    "requirements": ["CF-M1-008", "CF-M1-009"],
+    "status": "implementation_and_local_simulated_preview_complete; external_smtp_and_latest_full_isolation_pending",
+    "channels": ["durable_in_app", "configurable_smtp_email"],
+    "scheduling": "server_clock_start_minus_15_minutes_and_unchecked_start_plus_10_minutes",
+    "delivery_semantics": "unique_business_event_and_D_receive_deduplication; SMTP is at_least_once_attempt under uncertain acknowledgement",
+    "frontend": "three_second_polling_toast_after_historical_baseline; not_websocket",
+    "test_accelerator": "test_classpath_only triggerReminderPair for every new manual reservation; bypasses scheduling time only and is not timing acceptance",
+    "human_acceptance": "user_confirmed_simulated_page_effect; multi_reservation_fix_not_recorded_as_latest_full_isolation",
+    "real_provider_tested": false,
+    "d_owner_reviewed": false,
+    "remote_ci": "not_run",
+    "committed": true,
+    "record": "docs/process/m1-reminder-validation.md"
+  },
+  "no_show_stage": {
+    "requirements": ["CF-M1-010"],
+    "status": "implementation_local_isolation_and_human_visual_acceptance_complete; remote_ci_and_real_smtp_pending",
+    "deadline": "startAt_plus_15_minutes_by_server_clock",
+    "transition": "CONFIRMED_to_NO_SHOW_under_shared_user_and_room_locks",
+    "atomic_facts": ["reservation_state_and_version", "transition", "one_violation", "unique_no_show_outbox"],
+    "occupancy_release": "NO_SHOW_is_not_an_active_personal_occupancy; other_sources_are_not_deleted",
+    "race": "check_in_before_deadline_can_win; at_or_after_deadline establishes_NO_SHOW_and_rejects_late_check_in",
+    "automatic_completion": "CHECKED_IN_to_COMPLETED_at_endAt",
+    "history": "single_aggregate_read_returns_checkedInAt_completedAt_usageDurationSeconds_violationReason_and_serverTime",
+    "frontend": "text_icon_and_color_status; green_checked_in_or_completed; red_no_show",
+    "test_accelerator": "test_classpath_only makeNoShowDue; absent_from_production_jar",
+    "local_results": {"seats": 195, "web": 63, "typescript": "passed", "production_build": "passed", "isolated_no_show": "passed"},
+    "human_acceptance": "user_confirmed_red_violation_history_effect_on_2026-10-31",
+    "real_provider_tested": false,
+    "d_owner_reviewed": false,
+    "remote_ci": "not_run",
+    "committed": false,
+    "record": "docs/process/m1-no-show-validation.md"
+  },
+  "operations_stage": {
+    "requirements": ["CF-M1-011"],
+    "status": "implementation_local_isolation_and_human_visual_acceptance_complete; remote_ci_d_owner_review_and_production_scale_pending",
+    "permission": "dedicated seats.operations.read; registered_in_D_but_not_auto_granted_to_existing_roles",
+    "scope": "current_authenticated_department_rooms_and_seats_only; out_of_scope_filter_is_403",
+    "query": "read_only_repeatable_read; max_31_days; optional_room_seat_status; filter_bound_opaque_keyset_cursor",
+    "metrics": ["status_distribution", "check_in_rate", "violations", "reserved_duration", "actual_usage", "reservation_period_utilization", "room_and_seat_rankings"],
+    "privacy": "reservation_owner_identity_not_selected_or_returned",
+    "local_results": {"platform_full": "passed", "focused_seats": 71, "web_full_before_uuid_regression": 70, "operations_frontend_after_uuid_fix": 4, "typescript": "passed", "production_build": "passed", "isolated_operations": 7},
+    "human_acceptance": "user_confirmed_operations_dashboard_after_fixed_master_data_uuid_validation_on_2026-10-31",
+    "d_owner_reviewed": false,
+    "remote_ci": "not_run",
+    "committed": false,
+    "contract": "contracts/m1-operations-api.md",
+    "record": "docs/process/m1-operations-validation.md"
+  },
+  "personal_runtime_stage": {
+    "status": "implemented_and_locally_validated; human_script_and_specified_ui_accepted",
+    "authorization": {
+      "at": "2026-10-29",
+      "by": "leafwhisper286",
+      "instruction": "部分内容由于需要和其他模块联调，和跨模块接口确认，可以先留着之后再做，我们先完成“正式预约功能”，后续再做补充",
+      "scope": "ordinary M1 personal booking code/config/page first; defer external integration and contract review; not deployment approval"
+    },
+    "window_confirmation": {
+      "statement": "按自然日：允许预约到明天结束前的时段",
+      "mode": "CALENDAR_DAYS",
+      "days": 1,
+      "timezone": "Asia/Shanghai"
+    },
+    "plan": "docs/architecture/m1-personal-runtime-plan.md",
+    "contract": "contracts/m1-personal-api.md",
+    "validation": "docs/process/m1-personal-runtime-validation.md",
+    "implementation": [
+      "normal jar write configuration with explicit enable/Origin/independent CSRF secret",
+      "shared handler/protection with old isolated demo",
+      "calendar-day policy configurable and shared by query/create",
+      "normal seat-reservations page; history and recovery normal routing"
+    ],
+    "new_test_results": {
+      "seats": 164,
+      "web": 50,
+      "web_files": 9,
+      "read_tcp_regression": 28,
+      "legacy_demo_tcp_regression": 48,
+      "ordinary_packaged_jar_tcp": 53,
+      "new_mutations": 4,
+      "shared_security_mutations": 7,
+      "mutation_errors": 0,
+      "formal_java_unchanged_during_mutations": true,
+      "preview_ipv6_page_status": 200,
+      "preview_m1_proxy_anonymous_status": 401,
+      "browser_ui_checked": false,
+      "D24": "prior evidence retained; D source unchanged, not rerun"
+    },
+    "normal_jar_can_install_personal_writes": true,
+    "write_enabled_by_default": false,
+    "deployed_or_globally_released": false,
+    "m2_m3_integrated": false,
+    "schema_or_dependencies_changed": false,
+    "other_business_implemented": false,
+    "human_acceptance": {
+      "script_reverification": {
+        "at": "2026-10-29",
+        "reported_by": "leafwhisper286",
+        "explicitly_reported": {
+          "read_tcp": 28,
+          "legacy_demo_tcp": 48,
+          "ordinary_packaged_jar_tcp": 53,
+          "repository_modules": 4,
+          "repository_requirements": 27
+        },
+        "local_surefire_supplement": {
+          "tests": 164,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_mtime_shanghai": "2026-10-29 00:51:20–00:51:26",
+          "source": "AI read local reports; user did not paste Maven summary"
+        },
+        "frontend": "set-e script completed; user did not paste frontend counts or timings",
+        "browser_checked": false
+      },
+      "ui": {
+        "at": "2026-10-29",
+        "by": "leafwhisper286",
+        "statement": "结果一切正常",
+        "scope": [
+          "ordinary creation shows saved record and ID",
+          "repeat clears times; nonoverlapping new booking preserves both records with different IDs",
+          "day-after-tomorrow start rejected"
+        ],
+        "does_not_claim": [
+          "Network-specific manual inspection",
+          "line-by-line source review",
+          "other module owner approval",
+          "complete M1 acceptance",
+          "remote CI or deployment"
+        ]
+      },
+      "other_members_review": "not_claimed"
+    },
+    "committed": true,
+    "remote_ci": "not_run",
+    "deployments": "not_done",
+    "existing_user_demos_restarted_by_ai": false,
+    "remaining": [
+      "M2/M3 occupancy/source integration and real cross-module review",
+      "D in-flight disable race and midnight contract",
+      "CF-M1-010 and CF-M1-011 were implemented after this personal-runtime stage; see their dedicated stage records",
+      "real SMTP provider acceptance and D V4 owner review",
+      "whole-group CI/release/rollback coordination"
+    ],
+    "local_implementation_commits": {
+      "backend_and_network": "33e4a27",
+      "frontend": "91ed835"
+    }
+  }
+}
