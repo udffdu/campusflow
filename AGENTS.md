@@ -41,7 +41,7 @@
 用户已批准在独立 worktree 按最终 Format 和业务规则重建六阶段；此授权优先于上文早期范围说明。
 任务1A/1B已由用户验收并本地提交0be6fc9/2459c2a；任务1已验收提交283bd10；任务2已验收提交a82b723；任务3已验收提交cc0b0f9；任务4已于2026-11-03获用户内部验收；六阶段重建完成，停止开发，等待最终人工检查。外部评审未完成，不启用代理，不扩展维修。每阶段验证后等待用户明确验收，再本地提交并进入下一阶段。
 禁止 push、远程PR、D改动、未评审入口启用及自动处理合并冲突；不重写已应用迁移。
-基线9c98d43，保全提交588327b；详细计划见 docs/process/m3-reconstruction-plan.md。
+基线9c98d43，保全提交588327b；详细计划见 docs/process/M3/m3-reconstruction-plan.md。
 每次继续先读 spec/m3-context.json、docs/requirements/m3.md、contracts/platform-api.md 和本阶段验收记录。
 身份必须来自D验证CF_SESSION，检查allowed=true；本人过滤包括total；权限失败或D故障不得放行。
 备份留在仓库外，不暂存备份、凭据、真实数据、缓存和构建产物；仅暂存逐项核对的文件。

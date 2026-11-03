@@ -21,4 +21,4 @@ CSRF 采用 Spring CookieCsrfTokenRepository 的独立 double-submit 机制；D 
 
 外部待办：D 权限目录和角色映射（包括谁被授予报修及本人查询权限）、服务密钥发放、同源入口/CSRF 评审、部署数据库角色；M3 同伴检查字段及后续迁移交接。报修前实时检查 ROOM/effectiveActive；检查后到提交间房间被停用的分布式竞态尚需 D 确认，无跨服务锁或全局原子性承诺。重试仍先执行当前授权和房间有效性校验，权限撤销或房间停用会拒绝，不保证这种情形下重放旧响应。
 
-验证及演示见 [验证记录](../process/m3-reporting-validation.md) 和 [服务 README](../../services/maintenance/README.md)。
+验证及演示见 [验证记录](../process/M3/m3-rebuild-task1a-validation.md) 和 [服务 README](../../services/maintenance/README.md)。

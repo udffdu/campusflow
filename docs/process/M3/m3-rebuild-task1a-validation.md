@@ -66,8 +66,8 @@ $mvn='C:/Users/fgrhy/.m2/wrapper/dists/apache-maven-3.9.11/03d7e36a140982eea48e2
 
 ## 与原记录差异、待办及提交
 
-原1A验收记录保留在m3-reporting-validation.md，只作历史来源。重建提前采用最终Format，增加WorkOrderHistory映射和2项测试；V1不变。尚未进入阶段的测试保留在安全提交，后续逐项恢复，不通过删除失败测试缩小验证。
+原1A验收记录已备份至仓库外，只作历史来源。重建提前采用最终Format，增加WorkOrderHistory映射和2项测试；V1不变。尚未进入阶段的测试保留在安全提交，后续逐项恢复，不通过删除失败测试缩小验证。
 D依赖见../requirements/m3-d-capability-requests.md；真实D联调、数据库最小权限部署和同伴schema复核仍待完成。
 拟提交说明：feat(m3): [CF-M3-001][CF-M3-002] 按最终规则重建上报与本人查询后端。
-精确文件清单见m3-rebuild-task1a-files.txt。不包含备份、日志、target、依赖缓存、秘密或其他模块业务变更。
+精确文件以对应Git提交为准，阶段范围见m3-reconstruction-plan.md。不包含备份、日志、target、依赖缓存、秘密或其他模块业务变更。
 人工验收：2026-11-03用户明确通过。阶段提交以包含本记录的Git提交为准；哈希在下一阶段记录及仓库外进度清单中登记，避免提交自引用。真实D联调仍未通过。

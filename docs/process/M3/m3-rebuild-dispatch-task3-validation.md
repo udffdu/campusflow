@@ -14,7 +14,7 @@
 - 本人详情历史按最终Format映射真实CREATED/ASSIGNED；管理详情与派单响应延续受权裁剪，不含reporterId/departmentId/history，完整历史查询和页面留任务4。无V3提前引入。
 - DispatchPanel：选人后确认、连点防护、原键/人员/版本重试、409要求刷新、成功刷新工单。切换账号/撤权/工单版本或卸载后丢弃旧响应，避免旧请求触发新账号页面刷新。
 - 查询筛选允许ASSIGNED；候选接口对已派单状态仍拒绝。没有改派、取消、开始维修、超时、完工或通知发送。
-- 文件列表见 [本阶段清单](m3-rebuild-dispatch-task3-files.txt)。
+- 阶段范围见 [重建记录](m3-reconstruction-plan.md)，精确文件以对应Git提交为准。
 
 ## 审计投递与恢复
 

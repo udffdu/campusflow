@@ -1,6 +1,6 @@
 # M3 两人共同决策与第一次 Review 确认单
 
-> 2026-11-02 后续更新：用户已采用上报与本人查询六组内部建议及补全方案，见 [决定说明](m3-reporting-decisions.md)。本文件原待决表/核查状态保留为历史依据；当前实现与测试见 [验证记录](../process/m3-reporting-validation.md)。外部评审及整体验收未完成。
+> 2026-11-02 后续更新：用户已采用上报与本人查询六组内部建议及补全方案，见 [决定说明](m3-reporting-decisions.md)。本文件原待决表/核查状态保留为历史依据；当前实现与测试见 [验证记录](../process/M3/m3-rebuild-task1a-validation.md)。外部评审及整体验收未完成。
 状态：待讨论。所有推荐均未自动生效；没有记录确认人和结论的事项保持待确认。本文用于会议逐项讨论，确认后再同步需求、契约、规则文件与任务登记，不以本文件替代功能实现和验证。
 
 依据：课程任务书第一次 Review 的五类提交要求，以及本地仓库 AGENTS.md、spec/project.json、spec/requirements.json、contracts/platform-api.md、contracts/README.md 和 M3 现有草案。未将远程仓库最新情况视为已核验。
@@ -143,4 +143,4 @@
 3. 同步模块规则、接口契约、任务责任与迁移方案，经人工审查进入版本管理。
 4. 用已确认规则给 AI 下发小任务，实施和验证后再填写实际证据。本文本身不是授权无限扩展功能或自动提交推送。
 
-配套：[需求与验收](m3.md) · [当前可推进工作](m3-ready-work.md) · [外部依赖与后续实现](m3-dependencies-and-followup.md)。
+配套：[需求与验收](m3.md) · [当前可推进工作](m3-teammate-handoff.md) · [外部依赖与后续实现](m3-d-capability-requests.md)。

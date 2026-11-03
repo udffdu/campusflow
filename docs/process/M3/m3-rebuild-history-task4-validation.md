@@ -6,7 +6,7 @@
 ## 需求、实现与文件
 
 关联CF-M3-002（受权详情/历史）、CF-M3-003（首次派单历史原子性与重放）。需求基线保持proposed，未将外部待办自动accepted。
-详细 [修改文件清单](m3-rebuild-history-task4-files.txt)。
+阶段范围见 [重建记录](m3-reconstruction-plan.md)，精确修改文件以对应Git提交为准。
 
 | 文件/能力 | 本阶段实现与原因 |
 | --- | --- |
@@ -100,7 +100,7 @@ ORDER BY occurred_at,id;
 
 V3升级会改变保存响应的序列化表示；业务键、内容签名和原创建/派单事实不变，不保证升级前后字节一致。迁移只在临时测试库验证，部署/schema复核仍待；不能用切换源码降级业务数据库。
 
-D-M3-01～07仍待权限/人员接口/真实HTTP适配/环境/入口/审计联合验收；08姓名可选，当前显示ID。通知未实现。后续维修只有统一模型、版本/历史约定和适配边界，没有开始维修接口。详见 [D清单](../requirements/m3-d-capability-requests.md)、[维修交接](../requirements/m3-teammate-handoff.md)。
+D-M3-01～07仍待权限/人员接口/真实HTTP适配/环境/入口/审计联合验收；08姓名可选，当前显示ID。通知未实现。后续维修只有统一模型、版本/历史约定和适配边界，没有开始维修接口。详见 [D清单](../../requirements/m3-d-capability-requests.md)、[维修交接](../../requirements/m3-teammate-handoff.md)。
 
 人工确认位置：本页首段记录用户批准任务3并进入任务4；重建总体方案见m3-reconstruction-plan.md。任务4本身等待验收。
 拟提交：feat(m3): [CF-M3-002][CF-M3-003] 重建操作历史与Format交接。

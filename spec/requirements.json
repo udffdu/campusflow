@@ -286,10 +286,10 @@
       ],
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
-        "docs/process/m3-rebuild-task1a-validation.md",
+        "docs/process/M3/m3-rebuild-task1a-validation.md",
         "apps/web/src/components/MaintenanceViews.test.ts",
         "apps/web/src/maintenance.test.ts",
-        "docs/process/m3-rebuild-task1b-validation.md"
+        "docs/process/M3/m3-rebuild-task1b-validation.md"
       ]
     },
     {
@@ -317,13 +317,13 @@
       ],
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
-        "docs/process/m3-rebuild-task1a-validation.md",
+        "docs/process/M3/m3-rebuild-task1a-validation.md",
         "apps/web/src/components/MaintenanceViews.test.ts",
         "apps/web/src/maintenance.test.ts",
-        "docs/process/m3-rebuild-task1b-validation.md",
+        "docs/process/M3/m3-rebuild-task1b-validation.md",
         "apps/web/src/components/ManagementView.test.ts",
-        "docs/process/m3-rebuild-management-task1-validation.md",
-        "docs/process/m3-rebuild-history-task4-validation.md",
+        "docs/process/M3/m3-rebuild-management-task1-validation.md",
+        "docs/process/M3/m3-rebuild-history-task4-validation.md",
         "apps/web/src/components/WorkOrderHistory.test.ts"
       ]
     },
@@ -352,11 +352,11 @@
       "verification": [
         "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
         "apps/web/src/components/CandidatePicker.test.ts",
-        "docs/process/m3-rebuild-candidates-task2-validation.md",
-        "docs/process/m3-rebuild-dispatch-task3-validation.md",
+        "docs/process/M3/m3-rebuild-candidates-task2-validation.md",
+        "docs/process/M3/m3-rebuild-dispatch-task3-validation.md",
         "apps/web/src/components/DispatchPanel.test.ts",
         "services/maintenance/src/test/java/io/campusflow/maintenance/EligibilityGuardTest.java",
-        "docs/process/m3-rebuild-history-task4-validation.md",
+        "docs/process/M3/m3-rebuild-history-task4-validation.md",
         "apps/web/src/components/WorkOrderHistory.test.ts"
       ],
       "progress_note": "六阶段重建已获用户内部验收；最终31后端/36前端测试通过。真实D与外部评审未完成，baseline仍proposed，不将整体需求标accepted。"

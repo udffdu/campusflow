@@ -16,7 +16,7 @@
       "D_changes",
       "proxy_activation"
     ],
-    "current_task_review": "docs/requirements/m3-reporting-task-review.md",
+    "current_task_review": "docs/requirements/m3-reporting-decisions.md",
     "user_responsibility": [
       "fault_reporting",
       "own_and_scoped_queries",
@@ -81,8 +81,8 @@
     "D_contract": "contracts/platform-api.md",
     "format": "contracts/m3-work-order-format-v1.md",
     "reporting_decisions": "docs/requirements/m3-reporting-decisions.md",
-    "reconstruction": "docs/process/m3-reconstruction-plan.md",
-    "verification": "docs/process/m3-rebuild-dispatch-task3-validation.md",
+    "reconstruction": "docs/process/M3/m3-reconstruction-plan.md",
+    "verification": "docs/process/M3/m3-rebuild-dispatch-task3-validation.md",
     "candidate_port": "contracts/m3-candidate-port.md"
   },
   "change_policy": "Update this context when the user explicitly changes scope or rules; external contracts and schema changes still require affected-owner review. Do not infer acceptance from a recommendation."

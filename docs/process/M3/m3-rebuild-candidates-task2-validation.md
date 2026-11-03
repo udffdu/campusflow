@@ -5,7 +5,7 @@
 
 ## 实现、文件与边界
 
-- CandidateProvider：search(actorId,roomId,departmentId,query,page,size)，返回类型化候选及items/page/size/total，具体字段见 [D适配约定](../../contracts/m3-candidate-port.md)。
+- CandidateProvider：search(actorId,roomId,departmentId,query,page,size)，返回类型化候选及items/page/size/total，具体字段见 [D适配约定](../../../contracts/m3-candidate-port.md)。
 - PendingCandidateProvider：生产默认明确503/D_CANDIDATES_NOT_READY，不用假数据或空集合掩盖外部未接入。
 - CandidatesApi：GET /api/v1/maintenance/management/work-orders/{id}/candidates?q=&page=&size=。D验证maintenance.dispatch allowed=true；真实操作者来自会话，房间/院系来自M3工单，服务端检查工单范围及PENDING_DISPATCH。
 - page从0起、最大100000，size为1–100、默认20，q最多100码点并strip；拒绝自报actorId/departmentId及重复/未知参数。
@@ -13,7 +13,7 @@
 - CandidatePicker.vue：搜索、翻页、显示名称/启用/维修资格/服务范围、单选事件；加载、空态、服务未接入及重试；换页/搜索/账号/工单/权限变化清除旧选择并丢弃过时响应。
 - ManagementView详情只在待派单且有maintenance.dispatch时嵌入选择器。仅发出选择事件，无派单提交按钮或写请求；候选不是最终资格承诺。
 - 无迁移、无新增依赖、无D代码或代理变更。工单继续沿用最终Format及现有V1，不扩展维修、通知、历史。
-- 精确拟提交文件见 [清单](m3-rebuild-candidates-task2-files.txt)。
+- 阶段范围见 [重建记录](m3-reconstruction-plan.md)，精确文件可用对应提交的git show --stat查看。
 
 ## 实际命令与结果
 
@@ -86,8 +86,8 @@ curl.exe -i -b $jar "$base/api/v1/maintenance/management/work-orders/$id/candida
 ## D待办、差异与提交
 
 D-M3-01/03/05/06仍待：业务权限与维修资格映射、候选HTTP接口、凭据环境、入口/CSRF。M3已给出数据适配口，不虚构D路径；D交付后仍由M3实现真实HTTP适配器。
-D-M3-04提交时最终资格复核留任务3；候选选中不等于之后一定合格。详细状态见 [D清单](../requirements/m3-d-capability-requests.md)。
-原任务2记录m3-candidates-task2-validation.md保留为历史证据。本轮额外增加分页/响应完整性/上下文及页面过时响应测试，按最终规则重建，不伪造旧日期和结果。
+D-M3-04提交时最终资格复核留任务3；候选选中不等于之后一定合格。详细状态见 [D清单](../../requirements/m3-d-capability-requests.md)。
+原任务2记录已备份至仓库外，保留为历史证据。本轮额外增加分页/响应完整性/上下文及页面过时响应测试，按最终规则重建，不伪造旧日期和结果。
 派单事务、幂等、并发和权限破坏测试留任务3，不提前实现；独立历史展示留任务4。
 
 拟提交：feat(m3): [CF-M3-003] 重建维修人员选择及D候选适配口。
