@@ -360,6 +360,84 @@
         "apps/web/src/components/WorkOrderHistory.test.ts"
       ],
       "progress_note": "六阶段重建已获用户内部验收；最终31后端/36前端测试通过。真实D与外部评审未完成，baseline仍proposed，不将整体需求标accepted。"
+    },
+    {
+      "id": "CF-M3-004",
+      "module": "M3",
+      "title": "本人维修任务与维修处理",
+      "baseline_status": "proposed",
+      "status": "implemented",
+      "acceptance": [
+        "维修人员仅能查询本人被指派工单，列表 total 与详情同样隔离",
+        "仅被派且获权人员从 ASSIGNED 开始维修并从 IN_PROGRESS 提交非空完工说明",
+        "非法流转、旧版本及并发竞争拒绝；同键重放不重复历史或待发事件"
+      ],
+      "implementation": [
+        "services/maintenance/src/main/java/io/campusflow/maintenance/Lifecycle.java",
+        "services/maintenance/src/main/java/io/campusflow/maintenance/LifecycleApi.java",
+        "services/maintenance/src/main/resources/db/migration/V4__repair_lifecycle.sql",
+        "apps/web/src/components/RepairActions.vue",
+        "contracts/m3-repair-api.md"
+      ],
+      "verification": [
+        "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
+        "apps/web/src/components/RepairActions.test.ts",
+        "docs/process/M3/m3-b-first-review-validation.md"
+      ],
+      "progress_note": "B 首次 Review 内部实现，待人工验收及 A/schema、D/M1 外部评审；入口默认关闭。"
+    },
+    {
+      "id": "CF-M3-005",
+      "module": "M3",
+      "title": "报修人完工验收与返修",
+      "baseline_status": "proposed",
+      "status": "implemented",
+      "acceptance": [
+        "仅获验收权限的报修人可验收待验收工单，维修人不能自验",
+        "验收驳回需要原因并回到维修中，返修与完工不解除限制",
+        "验收通过进入 COMPLETED，仅排队解除本工单限制，不冒称 M1 已确认"
+      ],
+      "implementation": [
+        "services/maintenance/src/main/java/io/campusflow/maintenance/Lifecycle.java",
+        "services/maintenance/src/main/java/io/campusflow/maintenance/LifecycleApi.java",
+        "services/maintenance/src/main/resources/db/migration/V4__repair_lifecycle.sql",
+        "apps/web/src/components/RepairActions.vue",
+        "contracts/m3-repair-api.md"
+      ],
+      "verification": [
+        "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
+        "apps/web/src/components/RepairActions.test.ts",
+        "docs/process/M3/m3-b-first-review-validation.md"
+      ],
+      "progress_note": "B 首次 Review 内部实现，待人工验收及 A/schema、D/M1 外部评审；入口默认关闭。"
+    },
+    {
+      "id": "CF-M3-006",
+      "module": "M3",
+      "title": "超时升级",
+      "baseline_status": "proposed",
+      "status": "planned",
+      "acceptance": [
+        "需冻结计时起点、阈值、接收人和返修轮次规则",
+        "按工单阶段轮次去重，重启重扫不重复升级，权限与通知故障可追溯"
+      ],
+      "implementation": [],
+      "verification": [],
+      "progress_note": "保留后续需求；未实现，规则待确认。"
+    },
+    {
+      "id": "CF-M3-007",
+      "module": "M3",
+      "title": "完工评价",
+      "baseline_status": "proposed",
+      "status": "planned",
+      "acceptance": [
+        "需确认评分与文字范围、评价次数和修改策略",
+        "仅授权报修人对已完成工单评价；越权及重复评价按确认规则拒绝"
+      ],
+      "implementation": [],
+      "verification": [],
+      "progress_note": "保留后续需求；未实现，规则待确认。"
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { can, loadSession, session } from './session'
+import MyRepairsView from './views/MyRepairsView.vue'
 import ManagementView from './views/ManagementView.vue'
 import ReportView from './views/ReportView.vue'
 import MyReportsView from './views/MyReportsView.vue'
@@ -12,6 +13,8 @@ import DeliveriesView from './views/DeliveriesView.vue'
 import AuditView from './views/AuditView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 export const router = createRouter({ history: createWebHistory(), routes: [
+  {path:'/repairs',component:MyRepairsView,meta:{title:'我的维修任务',permission:'maintenance.repair'}},
+  {path:'/repairs/:id',component:MyRepairsView,meta:{title:'维修工单详情',permission:'maintenance.repair'}},
   {path:'/maintenance-management',component:ManagementView,meta:{title:'管理工单',permission:'maintenance.read.scope'}},
   {path:'/maintenance-management/:id',component:ManagementView,meta:{title:'管理工单详情',permission:'maintenance.read.scope'}},
   {path:'/maintenance/new',component:ReportView,meta:{title:'故障报修',permission:'maintenance.report'}},

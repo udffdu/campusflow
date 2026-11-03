@@ -1,7 +1,7 @@
 import { ApiError } from './api'
 export interface ReportInput { roomId:string; faultType:string; description:string }
 export interface HistoryEntry {id:string;action:string;actorId:string;fromStatus:string|null;toStatus:string;assigneeId:string|null;remark:string|null;occurredAt:string}
-export interface WorkOrder extends ReportInput {id:string;reporterId:string;departmentId:string;status:string;assigneeId:string|null;dispatcherId:string|null;createdAt:string;assignedAt:string|null;updatedAt:string;version:number;history?:HistoryEntry[]}
+export interface WorkOrder extends ReportInput {id:string;reporterId:string;departmentId:string;status:string;assigneeId:string|null;dispatcherId:string|null;createdAt:string;assignedAt:string|null;updatedAt:string;version:number;history?:HistoryEntry[];maintenanceSync?:string}
 export const faultNames:Record<string,string>={LIGHTING:'照明',POWER:'供电',FURNITURE:'家具',HVAC:'空调',OTHER:'其他'}
 export const stateName=(status:string)=>({PENDING_DISPATCH:'待派单',ASSIGNED:'已派单',IN_PROGRESS:'维修中',PENDING_ACCEPTANCE:'待验收',COMPLETED:'已完成'} as Record<string,string>)[status]??status
 export const maintenanceEnabled=()=>import.meta.env.VITE_M3_INTEGRATION_APPROVED==='true'
@@ -12,7 +12,7 @@ export function maintenanceMessage(error:unknown) {
   }
   return error instanceof Error?error.message:'操作失败，请重试。'
 }
-export async function maintenance<T>(path:string,body?:ReportInput|{assigneeId:string;expectedVersion:number},key?:string):Promise<T> {
+export async function maintenance<T>(path:string,body?:ReportInput|{assigneeId:string;expectedVersion:number}|{expectedVersion:number;remark:string},key?:string):Promise<T> {
   if(!maintenanceEnabled()) throw new Error('报修服务接入尚未开放，请等待入口与权限配置完成。')
   const request=async(url:string,options:RequestInit={})=>{
     let response:Response

@@ -44,6 +44,8 @@ class ReportingTest {
                         boolean allowed=!token.equals("denied") && Set.of("maintenance.report","maintenance.read.own").contains(req.path("permission").asText());
                         if(req.path("permission").asText().equals("maintenance.read.scope")) allowed=Set.of("manager","managerB","global").contains(token);
                         if(req.path("permission").asText().equals("maintenance.dispatch")) allowed=token.equals("dispatcher")||token.equals("dispatcher2");
+                        if(req.path("permission").asText().equals("maintenance.repair")) allowed=Set.of("B","repair-other").contains(token);
+                        if(req.path("permission").asText().equals("maintenance.accept")) allowed=Set.of("A","B").contains(token);
                         if(mode.equals("revoked"))allowed=false;
                         if(mode.equals("scope") && req.has("departmentId")) allowed=false;
                         body=Map.of("allowed",allowed,"identity",Map.of("id",token.equals("B")||token.equals("dispatcher2")?B:A,"departmentId",token.equals("managerB")?DEP_B:DEP,"active",true,"roles",List.of(token.equals("global")||token.equals("adminWithoutPermission")?"ADMIN":"MEMBER")));
@@ -56,10 +58,11 @@ class ReportingTest {
     }
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
         r.add("spring.datasource.url",()->PG.getJdbcUrl("postgres","postgres"));r.add("spring.datasource.username",()->"postgres");r.add("spring.datasource.password",()->"");
+        r.add("maintenance.lifecycle-enabled",()->true);
         r.add("maintenance.d-url",()->"http://127.0.0.1:"+D.getAddress().getPort());r.add("maintenance.service-key",()->KEY);r.add("maintenance.cookie-secure",()->false);
     }
     @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired ObjectMapper mapper;@Autowired Flyway flyway;
-    @BeforeEach void reset() { mode="ok";db.execute("truncate dispatch_results,creation_results,audit_outbox,work_order_history,work_orders"); }
+    @BeforeEach void reset() { mode="ok";db.execute("truncate maintenance_intents,lifecycle_results,dispatch_results,creation_results,audit_outbox,work_order_history,work_orders"); }
     @AfterAll static void close() throws Exception { D.stop(0);PG.close(); }
     MockHttpServletRequestBuilder csrf(MockHttpServletRequestBuilder req) throws Exception {
         var res=mvc.perform(get("/api/v1/maintenance/csrf")).andExpect(status().isOk()).andReturn().getResponse();var body=mapper.readTree(res.getContentAsString());
@@ -352,7 +355,7 @@ class ReportingTest {
         try{
             Flyway.configure().dataSource(url,"postgres","").schemas(schema).target("1").load().migrate();
             UUID id=UUID.randomUUID();db.update("insert into "+schema+".work_orders values(?,?,?,?,?,?,?,?,?)",id,A,ROOM,DEP,1,"OTHER","existing repair","PENDING_DISPATCH",java.sql.Timestamp.from(java.time.Instant.now()));
-            var upgraded=Flyway.configure().dataSource(url,"postgres","").schemas(schema).load();assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(2);assertThat(upgraded.migrate().migrationsExecuted).isZero();
+            var upgraded=Flyway.configure().dataSource(url,"postgres","").schemas(schema).load();assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(3);assertThat(upgraded.migrate().migrationsExecuted).isZero();
             assertThat(db.queryForObject("select version from "+schema+".work_orders where id=?",Long.class,id)).isEqualTo(1);assertThat(db.queryForObject("select updated_at=created_at from "+schema+".work_orders where id=?",Boolean.class,id)).isTrue();upgraded.validate();
         }finally{db.execute("drop schema "+schema+" cascade");}
     }
@@ -425,7 +428,7 @@ class ReportingTest {
             db.update("insert into "+schema+".work_order_history(id,work_order_id,actor_id,status,occurred_at,action,from_status,assignee_id) values(?,?,?,'ASSIGNED',?::timestamptz,'ASSIGNED','PENDING_DISPATCH',?)",assignedHistory,id,A,assignedTime,B);
             var dispatched=new LinkedHashMap<String,Object>(old);dispatched.put("status","ASSIGNED");dispatched.put("version",2);dispatched.put("assignedAt",assignedTime);dispatched.put("assigneeId",B);dispatched.put("dispatcherId",A);dispatched.put("updatedAt",assignedTime);dispatched.remove("history");
             db.update("insert into "+schema+".dispatch_results values(?,?,?,?)",A,"dispatch-key","original-dispatch",mapper.writeValueAsString(dispatched));
-            var migrated=Flyway.configure().dataSource(url,"postgres","").schemas(schema).load();assertThat(migrated.migrate().migrationsExecuted).isEqualTo(1);
+            var migrated=Flyway.configure().dataSource(url,"postgres","").schemas(schema).load();assertThat(migrated.migrate().migrationsExecuted).isEqualTo(2);
             var snapshot=mapper.readTree(db.queryForObject("select response_json from "+schema+".creation_results",String.class));assertThat(snapshot.has("resourceVersion")).isFalse();assertThat(snapshot.path("history").get(0).path("id").asText()).isEqualTo(history.toString());assertThat(snapshot.path("history").get(0).path("toStatus").asText()).isEqualTo("PENDING_DISPATCH");assertThat(snapshot.path("version").asInt()).isEqualTo(1);assertThat(db.queryForObject("select canonical_content from "+schema+".creation_results",String.class)).isEqualTo("original-input");assertThat(migrated.migrate().migrationsExecuted).isZero();
             assertThat(snapshot.path("status").asText()).isEqualTo("PENDING_DISPATCH");assertThat(snapshot.path("assigneeId").isNull()).isTrue();assertThat(snapshot.path("history").size()).isEqualTo(1);
             var savedDispatch=mapper.readTree(db.queryForObject("select response_json from "+schema+".dispatch_results",String.class));assertThat(savedDispatch.path("status").asText()).isEqualTo("ASSIGNED");assertThat(savedDispatch.path("version").asInt()).isEqualTo(2);assertThat(savedDispatch.path("history").size()).isEqualTo(2);assertThat(savedDispatch.path("history").get(1).path("id").asText()).isEqualTo(assignedHistory.toString());
@@ -451,8 +454,91 @@ class ReportingTest {
     @Test void G_emptyMigrationAndRepeat() {
         String schema="migration_"+UUID.randomUUID().toString().replace("-","");
         var clean=Flyway.configure().dataSource(PG.getJdbcUrl("postgres","postgres"),"postgres","").schemas(schema).load();
-        try { assertThat(clean.migrate().migrationsExecuted).isEqualTo(3);assertThat(clean.migrate().migrationsExecuted).isZero();clean.validate(); }
+        try { assertThat(clean.migrate().migrationsExecuted).isEqualTo(4);assertThat(clean.migrate().migrationsExecuted).isZero();clean.validate(); }
         finally { db.execute("drop schema "+schema+" cascade"); }
         flyway.validate();
+    }
+
+    UUID assigned() throws Exception {
+        UUID id=UUID.fromString(node(create("A","source",input("repair lifecycle lamp"))).path("id").asText());
+        dispatch(id,"dispatcher","initial",B,1).andExpect(status().isOk());return id;
+    }
+    ResultActions move(UUID id,String user,String action,String key,long version,String remark) throws Exception {
+        String path=action.equals("pass")||action.equals("reject")?"/work-orders/"+id+"/acceptance/"+action:"/repair/work-orders/"+id+"/"+action;
+        return mvc.perform(csrf(post("/api/v1/maintenance"+path)).cookie(new Cookie("CF_SESSION",user)).header("Idempotency-Key",key).contentType("application/json").content(mapper.writeValueAsString(Map.of("expectedVersion",version,"remark",remark))));
+    }
+    @Test void lifecycleFullChainAndOriginalReplay() throws Exception {
+        UUID id=assigned();var started=node(move(id,"B","start","s",2,"").andExpect(status().isOk()));
+        assertThat(started.path("status").asText()).isEqualTo("IN_PROGRESS");assertThat(started.path("maintenanceSync").asText()).isEqualTo("UNCONFIRMED");
+        move(id,"B","completion","c",3,"replaced lamp").andExpect(status().isOk());
+        var accepted=node(move(id,"A","pass","p",4,"").andExpect(status().isOk()));
+        assertThat(accepted.path("status").asText()).isEqualTo("COMPLETED");assertThat(accepted.path("version").asLong()).isEqualTo(5);
+        assertThat(accepted.path("history").size()).isEqualTo(5);
+        assertThat(db.queryForList("select action from work_order_history where work_order_id=? order by occurred_at,id",String.class,id)).containsExactly("CREATED","ASSIGNED","REPAIR_STARTED","COMPLETION_SUBMITTED","ACCEPTANCE_PASSED");
+        assertThat(db.queryForList("select target from maintenance_intents where work_order_id=? order by operation_version",String.class,id)).containsExactly("BLOCKED","RELEASED");
+        assertThat(node(move(id,"B","start","s",2,"").andExpect(status().isOk()))).isEqualTo(started);
+        assertThat(db.queryForObject("select status from work_orders where id=?",String.class,id)).isEqualTo("COMPLETED");
+        assertThat(count("work_order_history")).isEqualTo(5);assertThat(count("audit_outbox")).isEqualTo(5);assertThat(count("maintenance_intents")).isEqualTo(2);
+    }
+    @Test void lifecycleReturnForRepairNeverReleasesEarly() throws Exception {
+        UUID id=assigned();move(id,"B","start","s",2,"").andExpect(status().isOk());move(id,"B","completion","c",3,"fixed").andExpect(status().isOk());
+        move(id,"A","reject","r",4,"still broken").andExpect(status().isOk());assertThat(count("maintenance_intents")).isEqualTo(1);
+        assertThat(db.queryForObject("select status from work_orders where id=?",String.class,id)).isEqualTo("IN_PROGRESS");
+        move(id,"B","completion","c2",5,"fixed again").andExpect(status().isOk());move(id,"A","pass","p",6,"").andExpect(status().isOk());assertThat(count("maintenance_intents")).isEqualTo(2);
+    }
+    @Test void lifecycleAssignmentPrivacyAndFailClosed() throws Exception {
+        UUID id=assigned();String base="/api/v1/maintenance/repair/work-orders";
+        mvc.perform(get(base).cookie(new Cookie("CF_SESSION","B"))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.items[0].history").doesNotExist());
+        mvc.perform(get(base).cookie(new Cookie("CF_SESSION","repair-other"))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get(base+"/"+id).cookie(new Cookie("CF_SESSION","repair-other"))).andExpect(status().isNotFound());
+        mvc.perform(get(base+"/"+id).cookie(new Cookie("CF_SESSION","B"))).andExpect(status().isOk()).andExpect(jsonPath("$.history.length()").value(2));
+        mvc.perform(get(base).cookie(new Cookie("CF_SESSION","B")).param("assigneeId",A.toString())).andExpect(status().isBadRequest());
+        move(id,"repair-other","start","other",2,"").andExpect(status().isNotFound());move(id,"A","start","denied",2,"").andExpect(status().isForbidden());move(id,"B","pass","wrong",2,"").andExpect(status().isNotFound());
+        mvc.perform(post(base+"/"+id+"/start").cookie(new Cookie("CF_SESSION","B")).contentType("application/json").content("{}")).andExpect(status().isForbidden());
+        mode="down";move(id,"B","start","down",2,"").andExpect(status().isServiceUnavailable());mode="revoked";move(id,"B","start","revoked",2,"").andExpect(status().isForbidden());mode="ok";
+        assertThat(count("lifecycle_results")).isZero();assertThat(count("maintenance_intents")).isZero();
+    }
+    @Test void lifecycleValidationAndKeyConflicts() throws Exception {
+        UUID id=assigned();move(id,"B","completion","early",2,"fixed").andExpect(status().isConflict());move(id,"B","start","old",1,"").andExpect(status().isConflict());
+        move(id,"B","start","s",2,"").andExpect(status().isOk());move(id,"B","start","s",2,"changed").andExpect(status().isConflict());
+        move(id,"B","completion","bad",3,"  ").andExpect(status().isBadRequest());move(id,"B","completion","bad",3,"x".repeat(1001)).andExpect(status().isBadRequest());
+        move(id,"B","completion","c",3,"fixed").andExpect(status().isOk());move(id,"A","reject","blank",4," ").andExpect(status().isBadRequest());assertThat(count("lifecycle_results")).isEqualTo(2);
+    }
+    @Test void lifecycleConcurrentKeysAndReplays() throws Exception {
+        UUID id=assigned();
+        try(var pool=Executors.newFixedThreadPool(2)) {var barrier=new CyclicBarrier(2);List<Future<Integer>> futures=new ArrayList<>();for(String key:List.of("one","two"))futures.add(pool.submit(()->{barrier.await();return move(id,"B","start",key,2,"").andReturn().getResponse().getStatus();}));assertThat(List.of(futures.get(0).get(20,TimeUnit.SECONDS),futures.get(1).get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(200,409);}
+        try(var pool=Executors.newFixedThreadPool(2)) {var barrier=new CyclicBarrier(2);List<Future<String>> futures=new ArrayList<>();for(int i=0;i<2;i++)futures.add(pool.submit(()->{barrier.await();return move(id,"B","completion","same",3,"done").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();}));assertThat(futures.get(0).get(20,TimeUnit.SECONDS)).isEqualTo(futures.get(1).get(20,TimeUnit.SECONDS));}
+        assertThat(count("lifecycle_results")).isEqualTo(2);assertThat(count("work_order_history")).isEqualTo(4);assertThat(count("maintenance_intents")).isEqualTo(1);
+    }
+    @Test void lifecycleTransactionRollbackIncludesIntent() throws Exception {
+        UUID id=assigned();db.execute("create function fail_intent() returns trigger language plpgsql as $$ begin raise exception 'injected'; end $$");db.execute("create trigger inject_intent before insert on maintenance_intents for each row execute function fail_intent()");
+        try {move(id,"B","start","retry",2,"").andExpect(status().isInternalServerError());assertThat(count("lifecycle_results")).isZero();assertThat(count("maintenance_intents")).isZero();assertThat(count("work_order_history")).isEqualTo(2);assertThat(count("audit_outbox")).isEqualTo(2);assertThat(db.queryForObject("select version from work_orders where id=?",Long.class,id)).isEqualTo(2);}
+        finally {db.execute("drop trigger inject_intent on maintenance_intents");db.execute("drop function fail_intent()");}
+        move(id,"B","start","retry",2,"").andExpect(status().isOk());
+    }
+    @Test void lifecycleSelfAcceptanceAndDefaultGate() throws Exception {
+        UUID id=UUID.fromString(node(create("B","self",input("self reported fault"))).path("id").asText());dispatch(id,"dispatcher","d",B,1).andExpect(status().isOk());move(id,"B","start","s",2,"").andExpect(status().isOk());move(id,"B","completion","c",3,"fixed").andExpect(status().isOk());move(id,"B","pass","p",4,"").andExpect(status().isForbidden());
+        assertThatThrownBy(()->new LifecycleApi(null,null,false).detail(id,new org.springframework.mock.web.MockHttpServletRequest())).isInstanceOfSatisfying(Failure.class,e->assertThat(e.code).isEqualTo("LIFECYCLE_NOT_ENABLED"));
+    }
+
+    @Test void lifecycleControlledFieldsAndUnicodeBoundaries() throws Exception {
+        UUID id=assigned();String path="/api/v1/maintenance/repair/work-orders/"+id+"/start";
+        for(Object body:List.of(Map.of("expectedVersion",2,"actorId",A),Map.of("expectedVersion",2,"status","COMPLETED"),Map.of("remark","missing version")))
+            mvc.perform(csrf(post(path)).cookie(new Cookie("CF_SESSION","B")).header("Idempotency-Key","x").contentType("application/json").content(mapper.writeValueAsString(body))).andExpect(status().isBadRequest());
+        mvc.perform(csrf(post(path)).header("Idempotency-Key","x").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+        move(id,"B","start","bad key",2,"").andExpect(status().isBadRequest());
+        move(id,"B","start","s",2,"").andExpect(status().isOk());
+        String explanation="\uD83D\uDCA1".repeat(1000);
+        move(id,"B","completion","c",3,explanation).andExpect(status().isOk());
+        assertThat(db.queryForObject("select char_length(remark) from work_order_history where action='COMPLETION_SUBMITTED'",Integer.class)).isEqualTo(1000);
+    }
+    @Test void lifecycleIntentReleaseIsIsolatedByWorkOrder() throws Exception {
+        UUID first=assigned();UUID second=UUID.fromString(node(create("A","second",input("second broken lamp"))).path("id").asText());
+        dispatch(second,"dispatcher","second-d",B,1).andExpect(status().isOk());
+        move(first,"B","start","first-start",2,"").andExpect(status().isOk());move(second,"B","start","second-start",2,"").andExpect(status().isOk());
+        move(first,"B","completion","c",3,"fixed").andExpect(status().isOk());move(first,"A","pass","p",4,"").andExpect(status().isOk());
+        assertThat(db.queryForList("select target from maintenance_intents where work_order_id=? order by operation_version",String.class,second)).containsExactly("BLOCKED");
+        assertThat(db.queryForObject("select status from work_orders where id=?",String.class,second)).isEqualTo("IN_PROGRESS");
+        assertThat(db.queryForList("select distinct sync_status from maintenance_intents",String.class)).containsExactly("UNCONFIRMED");
     }
 }

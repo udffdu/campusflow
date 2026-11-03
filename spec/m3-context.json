@@ -85,5 +85,25 @@
     "verification": "docs/process/M3/m3-rebuild-dispatch-task3-validation.md",
     "candidate_port": "contracts/m3-candidate-port.md"
   },
-  "change_policy": "Update this context when the user explicitly changes scope or rules; external contracts and schema changes still require affected-owner review. Do not infer acceptance from a recommendation."
+  "change_policy": "Update this context when the user explicitly changes scope or rules; external contracts and schema changes still require affected-owner review. Do not infer acceptance from a recommendation.",
+  "B_current_work": {
+    "date": "2026-11-03",
+    "authorized_by": "current user requested B development",
+    "scope": [
+      "CF-M3-004",
+      "CF-M3-005"
+    ],
+    "followup": [
+      "CF-M3-006",
+      "CF-M3-007"
+    ],
+    "basis": "docs/requirements/m3-b-first-review.md",
+    "restrictions": [
+      "No production ingress activation",
+      "V4 awaiting A/schema review before shared database application",
+      "Commit/push B branch authorized after user command acceptance; no merge/deploy",
+      "No claim of real M1/D integration"
+    ],
+    "human_acceptance": "2026-11-03: user reports command verification accepted and authorizes repository branch submission; browser and real integration not accepted"
+  }
 }

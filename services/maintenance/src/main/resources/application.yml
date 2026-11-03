@@ -16,6 +16,7 @@ spring:
   flyway:
     enabled: true
 maintenance:
+  lifecycle-enabled: ${M3_LIFECYCLE_ENABLED:false}
   d-url: ${M3_D_URL}
   service-key: ${M3_SERVICE_KEY}
   audit-enabled: ${M3_AUDIT_ENABLED:false}

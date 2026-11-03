@@ -59,3 +59,14 @@ outbox 存在只表示原子持久化，delivered_at 为空，不表示 D 已收
 任务3新增POST /api/v1/maintenance/management/work-orders/{id}/dispatch，JSON仅assigneeId/expectedVersion，独立CSRF与Idempotency-Key。生产资格默认503；M3_AUDIT_ENABLED默认false，启用前须D确认。当前真实派单字段从V2读取，不再固定null；详见 [任务3验收及审计恢复](../../docs/process/M3/m3-rebuild-dispatch-task3-validation.md)。
 
 任务4新增本人及管理 /{id}/history，先验证查看工单权限，返回Format八字段数组；详情也含历史，列表不含。V3原样恢复用于旧幂等响应兼容，无历史编辑/删除入口；真实D接入待办未解除。见 [任务4验收](../../docs/process/M3/m3-rebuild-history-task4-validation.md) 与 [维修交接](../../docs/requirements/m3-teammate-handoff.md)。
+
+
+## B 首次 Review 维修与验收（本地待验收）
+
+新增本人待修查询、开始维修、完工和验收接口，说明见 [B 方案](../../docs/requirements/m3-b-first-review.md)。M3_LIFECYCLE_ENABLED 默认 false；仅在隔离测试显式启用。前端原 VITE_M3_INTEGRATION_APPROVED 也保持关闭，未改共享代理。需要 D 确认 maintenance.repair / maintenance.accept，不能授予管理权限来替代本人任务查询。
+
+V4 为新增迁移提案，必须先与 A 评审编号和字段；不要在评审前对共享数据库运行本分支应用（Flyway 启动会迁移，不受生命周期开关控制）。V1/V2/V3 未修改。
+
+maintenance_intents 只保存以工单为来源的 BLOCKED/RELEASED 意图，没有实现 M1 发送和回执；UNCONFIRMED 不表示座位状态已经写回。超时升级和评价仍在需求登记中，未在本轮实现。
+
+本地验证：services/maintenance 下 ./mvnw.cmd verify（Windows）或 ./mvnw verify；前端 apps/web 下 npm ci、npm test、npm run build。测试使用真实临时 PostgreSQL 和 D 替身，不需要配置真实用户或业务库。人工验收说明见 [B 验证记录](../../docs/process/M3/m3-b-first-review-validation.md)。

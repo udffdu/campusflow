@@ -24,7 +24,7 @@ public class Management {
     @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public Map<String,Object> list(DClient.Actor actor,int page,int size,String status) {
         if(page<0||page>100000||size<1||size>100) throw new Failure(400,"INVALID_PAGE");
-        if(status!=null&&!Set.of("PENDING_DISPATCH","ASSIGNED").contains(status)) throw new Failure(400,"INVALID_STATUS");
+        if(status!=null&&!Set.of("PENDING_DISPATCH","ASSIGNED","IN_PROGRESS","PENDING_ACCEPTANCE","COMPLETED").contains(status)) throw new Failure(400,"INVALID_STATUS");
         List<Object> args=new ArrayList<>();String where=scope(actor,args);
         if(status!=null){where+=" and status=?";args.add(status);}
         long total=db.queryForObject("select count(*) from work_orders where "+where,Long.class,args.toArray());
