@@ -43,6 +43,7 @@ class ReportingTest {
                     else {
                         boolean allowed=!token.equals("denied") && Set.of("maintenance.report","maintenance.read.own").contains(req.path("permission").asText());
                         if(req.path("permission").asText().equals("maintenance.read.scope")) allowed=Set.of("manager","managerB","global").contains(token);
+                        if(req.path("permission").asText().equals("maintenance.dispatch")) allowed=token.equals("dispatcher");
                         if(mode.equals("scope") && req.has("departmentId")) allowed=false;
                         body=Map.of("allowed",allowed,"identity",Map.of("id",token.equals("B")?B:A,"departmentId",token.equals("managerB")?DEP_B:DEP,"active",true,"roles",List.of(token.equals("global")||token.equals("adminWithoutPermission")?"ADMIN":"MEMBER")));
                     }
@@ -236,6 +237,67 @@ class ReportingTest {
         mvc.perform(get(MANAGEMENT).cookie(new Cookie("CF_SESSION","manager")).param("status","ASSIGNED")).andExpect(status().isBadRequest());
         mode="inactive"; // Historical queries do not require the room to remain active.
         mvc.perform(get(MANAGEMENT+"/"+a).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isOk());
+    }
+    static volatile List<?> lastCandidateContext=List.of();
+    @org.springframework.boot.test.context.TestConfiguration
+    static class CandidateConfiguration {
+        @org.springframework.context.annotation.Bean @org.springframework.context.annotation.Primary
+        CandidateProvider candidates(){return (actor,room,department,q,page,size)->{
+            lastCandidateContext=List.of(actor,room,department,q);
+            if(mode.equals("candidateDown"))return new PendingCandidateProvider().search(actor,room,department,q,page,size);
+            if(mode.equals("candidateNull"))return null;
+            var person=new CandidateProvider.Candidate(B,"Test repairer",!mode.equals("candidateInactive"),mode.equals("candidateUnqualified")?"spaces.write":"maintenance.repair",false,List.of(mode.equals("candidateOutside")?UUID.randomUUID():department));
+            if(mode.equals("candidateDuplicate"))return new CandidateProvider.Page(List.of(person,person),page,size,2);
+            if(mode.equals("candidateBadTotal"))return new CandidateProvider.Page(List.of(person),page,size,21);
+            if(mode.equals("candidateBadPage"))return new CandidateProvider.Page(List.of(person),page+1,size,1);
+            if(mode.equals("candidatePaged")){
+                var all=java.util.stream.IntStream.rangeClosed(1,21)
+                    .mapToObj(i->new CandidateProvider.Candidate(new UUID(0,i),String.format("Repairer %02d",i),true,"maintenance.repair",false,List.of(department)))
+                    .filter(p->p.displayName().contains(q)).toList();
+                return new CandidateProvider.Page(all.stream().skip((long)page*size).limit(size).toList(),page,size,all.size());
+            }
+            return new CandidateProvider.Page(mode.equals("candidateEmpty")||page>0?List.of():List.of(person),page,size,mode.equals("candidateEmpty")?0:1);
+        };}
+    }
+    @Test void candidatesScopeEligibilityAndPagination() throws Exception {
+        UUID id=seedManaged(DEP,"repair needed");String url=MANAGEMENT+"/"+id+"/candidates";
+        mvc.perform(get(url).cookie(new Cookie("CF_SESSION","A"))).andExpect(status().isForbidden());
+        UUID outside=seedManaged(UUID.randomUUID(),"outside repair");mvc.perform(get(MANAGEMENT+"/"+outside+"/candidates").cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isNotFound());
+        var result=node(mvc.perform(get(url).cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isOk()));assertThat(result.path("items").get(0).path("id").asText()).isEqualTo(B.toString());assertThat(result.toString()).doesNotContain("password","sessionToken","actorId");
+        mvc.perform(get(url).param("page","1").cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0)).andExpect(jsonPath("$.total").value(1));
+        for(String m:List.of("candidateInactive","candidateUnqualified","candidateOutside","candidateDown")){mode=m;mvc.perform(get(url).cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isServiceUnavailable());}
+        mode="candidateEmpty";mvc.perform(get(url).cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get(url).param("departmentId",DEP.toString()).cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isBadRequest());
+        assertThatThrownBy(()->new PendingCandidateProvider().search(A,ROOM,DEP,"",0,20)).isInstanceOf(Failure.class).hasMessage("D_CANDIDATES_NOT_READY");
+    }
+    @Test void candidatesTraverseAllPagesAndUseServerContext() throws Exception {
+        UUID id=seedManaged(DEP,"needs repair");String url=MANAGEMENT+"/"+id+"/candidates";mode="candidatePaged";
+        var first=node(mvc.perform(get(url).cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isOk()));
+        var second=node(mvc.perform(get(url).param("page","1").cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isOk()));
+        assertThat(first.path("total").asInt()).isEqualTo(21);assertThat(first.path("items").size()).isEqualTo(20);
+        assertThat(second.path("total").asInt()).isEqualTo(21);assertThat(second.path("items").size()).isEqualTo(1);
+        Set<String> ids=new HashSet<>();first.path("items").forEach(p->ids.add(p.path("id").asText()));second.path("items").forEach(p->ids.add(p.path("id").asText()));assertThat(ids).hasSize(21);
+        var filtered=node(mvc.perform(get(url).param("q"," 21 ").cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isOk()));
+        assertThat(filtered.path("total").asInt()).isEqualTo(1);assertThat(filtered.path("items").get(0).path("displayName").asText()).isEqualTo("Repairer 21");
+        assertThat(lastCandidateContext).isEqualTo(List.of(A,ROOM,DEP,"21"));
+        Set<String> fields=new HashSet<>();filtered.path("items").get(0).fieldNames().forEachRemaining(fields::add);
+        assertThat(fields).containsExactlyInAnyOrder("id","displayName","active","qualification","globalScope","departmentIds");
+        assertThat(count("work_orders")).isEqualTo(1);
+        for(String table:List.of("work_order_history","audit_outbox","creation_results"))assertThat(count(table)).isZero();
+    }
+    @Test void candidatesRejectMalformedPagesAndQueryOverrides() throws Exception {
+        UUID id=seedManaged(DEP,"needs repair");String url=MANAGEMENT+"/"+id+"/candidates";
+        for(String m:List.of("candidateNull","candidateDuplicate","candidateBadTotal","candidateBadPage")){
+            mode=m;mvc.perform(get(url).cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("D_INVALID_CANDIDATES"));
+        }
+        mode="ok";
+        for(var params:List.of(Map.of("actorId",B.toString()),Map.of("page","-1"),Map.of("size","101"),Map.of("q","x".repeat(101)))){
+            var req=get(url).cookie(new Cookie("CF_SESSION","dispatcher"));params.forEach(req::param);mvc.perform(req).andExpect(status().isBadRequest());
+        }
+        mvc.perform(get(url).param("q","one","two").cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isBadRequest());
+        mvc.perform(get(url).cookie(new Cookie("CF_SESSION","manager"))).andExpect(status().isForbidden());
+        mode="down";mvc.perform(get(url).cookie(new Cookie("CF_SESSION","dispatcher"))).andExpect(status().isServiceUnavailable());
+        assertThat(count("work_orders")).isEqualTo(1);
     }
     @Test void G_emptyMigrationAndRepeat() {
         String schema="migration_"+UUID.randomUUID().toString().replace("-","");

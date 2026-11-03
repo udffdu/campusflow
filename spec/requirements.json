@@ -303,7 +303,7 @@
         "猜测他人工单 ID、修改筛选或分页不能越权；失效或停用账号被拒绝",
         "查询不泄露凭据或未授权用户资料，房间停用不删除历史工单；覆盖 docs/requirements/m3.md 中 R02 验收场景"
       ],
-      "progress_note": "1A/1B已验收提交；管理列表/详情已按最终规则重建，本阶段后端14项/前端24项及类型构建通过，待用户验收；真实D联调、独立历史接口/页面尚未完成。",
+      "progress_note": "1A/1B/任务1均经用户内部验收并本地提交；真实D联调及后续独立历史接口/页面尚未完成，baseline仍proposed。",
       "implementation": [
         "services/maintenance/src/main",
         "docs/requirements/m3-reporting-decisions.md",
@@ -328,16 +328,24 @@
       "module": "M3",
       "title": "管理员派单",
       "baseline_status": "proposed",
-      "status": "planned",
+      "status": "in_progress",
       "acceptance": [
         "具有派单业务权限且覆盖工单范围的管理员，只能向有效合资格且范围匹配的维修人员派单；资格接口待 D 评审",
         "派单原子记录人员、真实操作者、时间、状态历史和版本；无权限、非法状态、过期版本均拒绝",
         "同键同内容重放不重复生效，同键不同内容冲突；同版本并发派给不同人员只有一个成功且不能错误覆盖",
         "通知和审计待发送事件随派单事务保存，D 故障不撤销业务结果，重试保持 eventId；覆盖文档 R03 场景"
       ],
-      "implementation": [],
-      "verification": [],
-      "progress_note": "按最终Format规则重建任务1A；内部验证和人工验收见本阶段记录，真实D联调未完成。管理查询、人员选择、派单和独立历史接口尚未进入重建阶段。"
+      "implementation": [
+        "services/maintenance/src/main/java/io/campusflow/maintenance/CandidatesApi.java",
+        "apps/web/src/components/CandidatePicker.vue",
+        "contracts/m3-candidate-port.md"
+      ],
+      "verification": [
+        "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
+        "apps/web/src/components/CandidatePicker.test.ts",
+        "docs/process/m3-rebuild-candidates-task2-validation.md"
+      ],
+      "progress_note": "任务2候选查询与选择已重建，后端17项/前端29项、类型与构建通过，待用户验收。生产D候选适配默认503；首次派单尚未进入重建阶段，真实D联调未完成。"
     }
   ]
 }

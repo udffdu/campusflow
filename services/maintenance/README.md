@@ -52,4 +52,6 @@ outbox 存在只表示原子持久化，delivered_at 为空，不表示 D 已收
 
 重建任务1A：完整详情遵循 contracts/m3-work-order-format-v1.md；V1映射派单字段null、version=1、updatedAt=createdAt。此阶段只可用于独立V1测试库，不能指向已有V2/V3业务库。
 
-重建任务1已增加 GET /api/v1/maintenance/management/work-orders（page/size/status）及 /{id}。仅允许maintenance.read.scope获权身份，非ADMIN按院系过滤，详情越范围404。仅支持待派单状态，无候选/派单/独立历史接口；见 [本阶段验收](../../docs/process/m3-rebuild-management-task1-validation.md)。
+重建任务1已增加 GET /api/v1/maintenance/management/work-orders（page/size/status）及 /{id}。仅允许maintenance.read.scope获权身份，非ADMIN按院系过滤，详情越范围404。仅支持待派单状态，尚无派单/独立历史接口，候选接口见下方任务2说明；见 [本阶段验收](../../docs/process/m3-rebuild-management-task1-validation.md)。
+
+重建任务2新增GET /api/v1/maintenance/management/work-orders/{id}/candidates，要求maintenance.dispatch；生产PendingCandidateProvider明确503/D_CANDIDATES_NOT_READY。正式D接口仍待评审，不修改V1、不产生派单动作。见 [任务2验收](../../docs/process/m3-rebuild-candidates-task2-validation.md)。
