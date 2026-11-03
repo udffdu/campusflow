@@ -1,16 +1,19 @@
 # 跨模块接口清单（待组内评审）
 
-M2 浏览器接口见 [M2 API](rooms-api.md)，M2→M1 具体请求见 [占用契约](m2-occupancy-api.md)。M1 端仍是讨论稿；D 已实现的请求和响应以 [D API v1](platform-api.md) 为准，尚待受影响负责人评审。
+M1当前已实现[查询](m1-query-api.md)、[普通个人预约/配置](m1-personal-api.md)、[本人历史/再次预约](m1-history-api.md)、[签到生命周期](m1-check-in-api.md)、[CF-M1-008/009提醒](m1-reminder-api.md)及[CF-M1-011运营查询](m1-operations-api.md)。正常jar可显式启用受保护个人写入和后台提醒，默认均关闭；普通预约窗口按用户确认的上海自然日。CF-M1-010已将签到截止确定为预约开始后15分钟，并接入未签到取消、释放、一次违约、通知和自动完成；验证见[专项记录](../docs/process/m1-no-show-validation.md)。运营查询使用独立权限、院系范围和只读接口，验证见[运营记录](../docs/process/m1-operations-validation.md)。旧[隔离演示协议](m1-reservation-demo-api.md)保留供追溯，不表示普通入口仍依赖测试装配。
+
+M2 浏览器接口见 [M2 API](rooms-api.md)，M2→M1 具体请求见 [占用契约](m2-occupancy-api.md)。M1 整室占用端仍是讨论稿；D 已实现的请求和响应以 [D API v1](platform-api.md) 为准，尚待受影响负责人评审。
 每个模块拥有自己的契约；调用方共同评审变更，禁止共享数据库实体作为接口。
 
 | 提供方 | 接口草案 | 调用方 | 验收重点 |
 | --- | --- | --- | --- |
 | D | `GET /api/v1/auth/me` | web | 当前用户、权限和数据范围，不能伪造身份 |
-| D | `POST /internal/v1/authorization` | 敏感写操作 | 动作与具体资源范围校验 |
+| D | `POST /internal/v1/authorization` | M1查询/后续敏感动作 | 动作与具体资源范围校验 |
 | D | `GET /api/v1/resources?type=ROOM` | web | 基础筛选；不声称此刻可预约 |
 | D | `GET /internal/v1/resources/{id}` | M1/M2/M3 | 开放规则、归属、启停、版本 |
 | D | `GET /internal/v1/resources?type=SEAT&parentId={id}` | M1 | 座位属性和启停 |
 | D | `POST /internal/v1/notifications` | M1/M2/M3 | 持久化接收、事件去重、投递失败重试 |
+| D | `POST /internal/v1/email-notifications` | M1/M2/M3 | 独立邮件任务、事件去重、SMTP失败重试；真实通道需显式配置 |
 | D | `POST /internal/v1/audit` | M1/M2/M3 | 事件去重、权限、可追溯 |
 | M1 | `GET /internal/v1/rooms/{id}/availability` | M2 | 按时段预检查，不构成占用承诺 |
 | M1 | `PUT /internal/v1/room-occupancies/{applicationId}` | M2 | 原子占用或释放、去重、防乱序 |

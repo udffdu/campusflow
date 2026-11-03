@@ -21,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.*;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -41,16 +42,19 @@ class PlatformIntegrationTest {
         registry.add("platform.bootstrap-password",()->PASSWORD); registry.add("platform.cookie-secure",()->false);
         registry.add("platform.service-keys.M1",()->M1); registry.add("platform.service-keys.M2",()->M2);
         registry.add("platform.delivery-delay-ms",()->3600000);
+        registry.add("platform.email-delivery-delay-ms",()->3600000);
     }
     @Autowired MockMvc mvc; @Autowired JdbcTemplate db; @Autowired ObjectMapper mapper; @Autowired PasswordEncoder encoder;
-    @Autowired IdentityService identities; @Autowired NotificationService notifications; @Autowired Flyway flyway;
+    @Autowired IdentityService identities; @Autowired NotificationService notifications; @Autowired EmailNotificationService emails; @Autowired EmailDeliveryWorker emailWorker; @Autowired Flyway flyway;
+    @MockBean MailGateway mail;
     UUID adminId; Cookie admin;
     @BeforeEach void reset() throws Exception {
-        db.execute("truncate inbox,notification_tasks,audit_events,resources,user_sessions,user_roles,app_users");
+        org.mockito.Mockito.reset(mail);
+        db.execute("truncate inbox,email_notification_tasks,notification_tasks,audit_events,resources,user_sessions,user_roles,app_users");
         adminId=seed("admin",EIE,"ADMIN"); admin=login("admin");
     }
     UUID seed(String name,UUID department,String...roles) {
-        UUID id=UUID.randomUUID();db.update("insert into app_users(id,username,display_name,password_hash,department_id) values(?,?,?,?,?)",id,name,name,encoder.encode(PASSWORD),department);
+        UUID id=UUID.randomUUID();db.update("insert into app_users(id,username,display_name,email,password_hash,department_id) values(?,?,?,?,?,?)",id,name,name,name+"@example.invalid",encoder.encode(PASSWORD),department);
         for(String role:roles)db.update("insert into user_roles values(?,?)",id,role);return id;
     }
     Cookie login(String name) throws Exception {
@@ -144,8 +148,11 @@ class PlatformIntegrationTest {
     @Test void administratorsCanCreateAccountsAndDepartmentsWithoutLeakingPasswords() throws Exception {
         var department=node(json(post("/api/v1/departments"),new DepartmentWrite("LIB","图书馆"),admin).andExpect(status().isCreated()));
         UUID depId=UUID.fromString(department.get("id").asText());
-        var created=node(json(post("/api/v1/users"),new UserCreate("new.member","新成员",depId,Set.of("MEMBER"),PASSWORD),admin).andExpect(status().isCreated()));
+        var created=node(json(post("/api/v1/users"),new UserCreate("new.member","新成员","new.member@example.invalid",depId,Set.of("MEMBER"),PASSWORD),admin).andExpect(status().isCreated()));
+        assertThat(created.get("email").asText()).isEqualTo("new.member@example.invalid");
         assertThat(created.has("password")).isFalse();assertThat(created.has("passwordHash")).isFalse();
+        var legacy=node(json(post("/api/v1/users"),new UserCreate("legacy.member","旧客户端成员",depId,Set.of("MEMBER"),PASSWORD),admin).andExpect(status().isCreated()));
+        assertThat(legacy.get("email").isNull()).isTrue();
         Cookie member=login("new.member");mvc.perform(get("/api/v1/auth/me").cookie(member)).andExpect(jsonPath("$.departmentId").value(depId.toString()));
         json(post("/api/v1/users"),new UserCreate("new.member","重复账号",depId,Set.of("MEMBER"),PASSWORD),admin).andExpect(status().isConflict());
         json(put("/api/v1/departments/"+depId),new DepartmentWrite("CHANGED","重命名"),admin).andExpect(status().isBadRequest());
@@ -206,6 +213,110 @@ class PlatformIntegrationTest {
         json(post("/api/v1/notifications/"+id+"/read"),Map.of(),recipient).andExpect(status().isOk());mvc.perform(get("/api/v1/notifications/unread").cookie(recipient)).andExpect(jsonPath("$.count").value(0));
         mvc.perform(get("/internal/v1/notifications/"+id).header("Authorization","Bearer "+M2)).andExpect(status().isNotFound());
     }
+    @Test void emailNotificationIsDurableDeduplicatedAndDeliveredOutsideTheRequest()throws Exception{
+        UUID recipient=seed("mail-recipient",EIE,"MEMBER");var input=event(recipient);
+        String id=node(internal("/email-notifications",input,M1).andExpect(status().isAccepted())).get("id").asText();
+        internal("/email-notifications",input,M1).andExpect(status().isAccepted()).andExpect(jsonPath("$.id").value(id));
+        assertThat(db.queryForObject("select count(*) from email_notification_tasks",Integer.class)).isEqualTo(1);
+        emailWorker.deliver();
+        org.mockito.Mockito.verify(mail).send(UUID.fromString(id),"mail-recipient@example.invalid",input.title(),input.body());
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,UUID.fromString(id))).isEqualTo("DELIVERED");
+        var changed=new NotificationEvent(input.eventId(),recipient,"不同内容",input.body(),input.objectType(),input.objectId());
+        internal("/email-notifications",changed,M1).andExpect(status().isConflict());
+        mvc.perform(get("/internal/v1/email-notifications/"+id).header("Authorization","Bearer "+M2)).andExpect(status().isNotFound());
+    }
+    @Test void missingEmailRetriesDurablyAndEventuallyDeadLetters()throws Exception{
+        UUID recipient=seed("no-email",EIE,"MEMBER");db.update("update app_users set email=null where id=?",recipient);
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        for(int attempt=0;attempt<5;attempt++){
+            db.update("update email_notification_tasks set next_attempt_at='1970-01-01',lease_until=null,status=case when status='DELIVERING' then 'RETRY' else status end where id=?",id);
+            emailWorker.deliver();
+            assertThat(db.queryForObject("select attempts from email_notification_tasks where id=?",Integer.class,id)).isEqualTo(attempt+1);
+        }
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,id)).isEqualTo("DEAD");
+        assertThat(db.queryForObject("select last_error from email_notification_tasks where id=?",String.class,id)).isEqualTo("RECIPIENT_EMAIL_MISSING");
+        org.mockito.Mockito.verifyNoInteractions(mail);
+    }
+    @Test void expiredEmailDeliveryLeaseIsReclaimedAfterWorkerCrash()throws Exception{
+        UUID recipient=seed("leased-mail",EIE,"MEMBER");var input=event(recipient);
+        UUID id=UUID.fromString(node(internal("/email-notifications",input,M1).andExpect(status().isAccepted())).get("id").asText());
+        assertThat(emails.claim(1,java.time.Duration.ofMinutes(1))).hasSize(1);
+        db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",id);
+        emailWorker.deliver();
+        org.mockito.Mockito.verify(mail).send(id,"leased-mail@example.invalid",input.title(),input.body());
+        assertThat(db.queryForMap("select status,attempts from email_notification_tasks where id=?",id))
+                .containsEntry("status","DELIVERED").containsEntry("attempts",2);
+    }
+    @Test void staleEmailCallbacksCannotOverwriteReclaimedDelivery()throws Exception{
+        UUID recipient=seed("fenced-mail",EIE,"MEMBER");
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        var old=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",id);
+        var current=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        assertThat(current.token()).isNotEqualTo(old.token());
+        assertThat(emails.prepareDelivery(old)).isFalse();assertThat(emails.prepareDelivery(current)).isTrue();
+        emails.failed(old,"EMAIL_DELIVERY_FAILED");emails.delivered(old);
+        assertThat(db.queryForMap("select status,attempts,claim_token from email_notification_tasks where id=?",id))
+                .containsEntry("status","DELIVERING").containsEntry("attempts",2).containsEntry("claim_token",current.token());
+        emails.delivered(current);emails.failed(old,"EMAIL_DELIVERY_FAILED");
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,id)).isEqualTo("DELIVERED");
+    }
+    @Test void manualEmailRetryCannotReuseOldClaimEvenWhenAttemptsReset()throws Exception{
+        UUID recipient=seed("manual-mail",EIE,"MEMBER");
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        var old=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        emails.failed(old,"EMAIL_DELIVERY_FAILED");emails.retry(id);
+        var current=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        assertThat(current.attempts()).isEqualTo(old.attempts());assertThat(current.token()).isNotEqualTo(old.token());
+        emails.delivered(old);emails.failed(old,"EMAIL_DELIVERY_FAILED");
+        assertThat(emails.prepareDelivery(old)).isFalse();assertThat(emails.prepareDelivery(current)).isTrue();
+        emails.failed(current,"EMAIL_CHANNEL_DISABLED");
+        assertThat(db.queryForMap("select status,last_error from email_notification_tasks where id=?",id))
+                .containsEntry("status","RETRY").containsEntry("last_error","EMAIL_CHANNEL_DISABLED");
+    }
+    @Test void expiredEmailClaimCannotPrepareOrCompleteBeforeReclaim()throws Exception{
+        UUID recipient=seed("expired-mail",EIE,"MEMBER");
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        var claim=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",id);
+        assertThat(emails.prepareDelivery(claim)).isFalse();emails.delivered(claim);emails.failed(claim,"EMAIL_DELIVERY_FAILED");
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,id)).isEqualTo("DELIVERING");
+    }
+    @Test void slowSmtpFailureCannotOverwriteAnotherWorkersSuccess()throws Exception{
+        UUID recipient=seed("slow-mail",EIE,"MEMBER");
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        var reclaimed=new EmailNotificationService.Claim[1];
+        // Pause at the external boundary: worker B reclaims while worker A is inside SMTP.
+        org.mockito.Mockito.doAnswer(invocation->{
+            db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",id);
+            var current=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+            reclaimed[0]=current;
+            throw new IllegalStateException("injected SMTP timeout");
+        }).when(mail).send(org.mockito.ArgumentMatchers.eq(id),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        emailWorker.deliver();
+        assertThat(emails.prepareDelivery(reclaimed[0])).isTrue();
+        emails.delivered(reclaimed[0]);
+        assertThat(db.queryForMap("select status,attempts from email_notification_tasks where id=?",id))
+                .containsEntry("status","DELIVERED").containsEntry("attempts",2);
+    }
+    @Test void workerSkipsBatchEntriesWhoseLeaseExpiredWhileWaitingForSmtp()throws Exception{
+        UUID firstRecipient=seed("batch-first",EIE,"MEMBER"),secondRecipient=seed("batch-second",EIE,"MEMBER");
+        UUID first=UUID.fromString(node(internal("/email-notifications",event(firstRecipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        UUID second=UUID.fromString(node(internal("/email-notifications",event(secondRecipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        db.update("update email_notification_tasks set next_attempt_at='2000-01-01' where id=?",first);
+        db.update("update email_notification_tasks set next_attempt_at='2000-01-02' where id=?",second);
+        org.mockito.Mockito.doAnswer(invocation->{
+            db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",second);return null;
+        }).when(mail).send(org.mockito.ArgumentMatchers.eq(first),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        emailWorker.deliver();
+        org.mockito.Mockito.verify(mail,org.mockito.Mockito.never()).send(org.mockito.ArgumentMatchers.eq(second),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,first)).isEqualTo("DELIVERED");
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,second)).isEqualTo("DELIVERING");
+        emailWorker.deliver();
+        org.mockito.Mockito.verify(mail).send(org.mockito.ArgumentMatchers.eq(second),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,second)).isEqualTo("DELIVERED");
+    }
+
     @Test void serviceIdentityCannotBeForgedAndIntrospectionChecksLiveScope() throws Exception {
         internal("/authorization",new Authorization(admin.getValue(),"users.manage",SCI),"wrong").andExpect(status().isUnauthorized());
         internal("/authorization",new Authorization(admin.getValue(),"users.manage",SCI),M1).andExpect(jsonPath("$.allowed").value(true));
@@ -226,7 +337,14 @@ class PlatformIntegrationTest {
         assertThatThrownBy(()->db.update("delete from audit_events where id=?",UUID.fromString(id))).isInstanceOf(DataAccessException.class);
     }
     @Test void migrationsCanReplayWithoutChangingAppliedHistory() {
-        assertThat(flyway.info().applied()).hasSize(3);assertThat(flyway.migrate().migrationsExecuted).isZero();
+        assertThat(flyway.info().applied()).hasSize(7);assertThat(flyway.migrate().migrationsExecuted).isZero();
+    }
+    @Test void bothSeatAndRoomBuiltinRolesRemainProtected()throws Exception{
+        for(String role:List.of("SEAT_USER","ROOM_APPLICANT","ROOM_REVIEWER","ROOM_APPROVER")){
+            assertThat(db.queryForObject("select count(*) from roles where code=?",Integer.class,role)).isEqualTo(1);
+            json(put("/api/v1/roles/"+role),new RoleWrite(role,"overwrite",Set.of("spaces.read")),admin)
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("BUILTIN_ROLE"));
+        }
     }
     @Test void customRolesCannotGrantGlobalPrivilegesAndChangesAreImmediate() throws Exception {
         json(post("/api/v1/roles"),new RoleWrite("LIBRARIAN","图书馆空间维护",Set.of("spaces.read","spaces.write")),admin).andExpect(status().isCreated());
@@ -236,5 +354,131 @@ class PlatformIntegrationTest {
         assertThat(identities.findSession(user.getValue()).orElseThrow().permissions()).doesNotContain("spaces.write");
         json(post("/api/v1/roles"),new RoleWrite("ESCALATED","越权角色",Set.of("users.manage")),admin).andExpect(status().isBadRequest());
         json(put("/api/v1/roles/ADMIN"),new RoleWrite("ADMIN","override",Set.of("spaces.read")),admin).andExpect(status().isBadRequest());
+    }
+
+    @Test void seatPermissionsRequireExplicitAssignmentAndApplyToExistingSessions() throws Exception {
+        UUID id=seed("seat-member",EIE,"MEMBER");Cookie user=login("seat-member");
+        var permissions=List.of("seats.availability.read","seats.reservations.create","seats.reservations.read.own");
+        for(String permission:permissions) {
+            internal("/authorization",Map.of("sessionToken",user.getValue(),"permission",permission),M1)
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+            internal("/authorization",Map.of("sessionToken",admin.getValue(),"permission",permission),M1)
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+        }
+        json(put("/api/v1/users/"+id),new UserUpdate("seat-member",EIE,Set.of("MEMBER","SEAT_USER"),true),admin)
+                .andExpect(status().isOk());
+        for(String permission:permissions) {
+            internal("/authorization",Map.of("sessionToken",user.getValue(),"permission",permission),M1)
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(true));
+        }
+        assertThat(identities.findSession(user.getValue()).orElseThrow().permissions()).doesNotContain("spaces.write");
+        json(put("/api/v1/users/"+id),new UserUpdate("seat-member",EIE,Set.of("MEMBER"),true),admin).andExpect(status().isOk());
+        internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.reservations.create"),M1)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+    }
+
+    @Test void seatRoleIsProtectedAndCustomRolesCanSelectRegisteredSeatPermissions() throws Exception {
+        json(put("/api/v1/roles/SEAT_USER"),new RoleWrite("SEAT_USER","override",Set.of("spaces.write")),admin)
+                .andExpect(status().isBadRequest());
+        json(post("/api/v1/roles"),new RoleWrite("SEAT_READER","预约只读",Set.of("seats.reservations.read.own")),admin)
+                .andExpect(status().isCreated());
+        seed("seat-reader",EIE,"SEAT_READER");Cookie user=login("seat-reader");
+        internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.reservations.read.own"),M1)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(true));
+        internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.reservations.create"),M1)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+    }
+
+    @Test void seatOperationsPermissionRequiresAnExplicitCustomRoleAndAppliesImmediately() throws Exception {
+        UUID id=seed("seat-operator",EIE,"MEMBER");Cookie user=login("seat-operator");
+        for(Cookie session:List.of(user,admin)) {
+            internal("/authorization",Map.of("sessionToken",session.getValue(),"permission","seats.operations.read"),M1)
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(false));
+        }
+        json(post("/api/v1/roles"),new RoleWrite("SEAT_OPERATOR","座位预约运营",Set.of("seats.operations.read")),admin)
+                .andExpect(status().isCreated());
+        json(put("/api/v1/users/"+id),new UserUpdate("seat-operator",EIE,Set.of("MEMBER","SEAT_OPERATOR"),true),admin)
+                .andExpect(status().isOk());
+        internal("/authorization",Map.of("sessionToken",user.getValue(),"permission","seats.operations.read"),M1)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.allowed").value(true));
+        assertThat(identities.findSession(user.getValue()).orElseThrow().permissions())
+                .contains("seats.operations.read").doesNotContain("spaces.write","users.manage","audit.read");
+    }
+
+    @Test void roomScopeSurvivesLegacyUpdatesAndIsVisibleThroughInternalApi() throws Exception {
+        var nodes=hierarchy(EIE);var room=nodes[2];String path="/api/v1/resources/"+room.get("id").asText();
+        assertThat(room.get("bookingScope").asText()).isEqualTo("DEPARTMENT");
+        var body=new LinkedHashMap<>(update(room,true));body.put("bookingScope","CAMPUS");
+        var campus=node(json(put(path),body,admin).andExpect(status().isOk()));
+        assertThat(campus.get("version").asLong()).isGreaterThan(room.get("version").asLong());
+        assertThat(campus.get("departmentId").asText()).isEqualTo(EIE.toString());
+        var legacy=node(json(put(path),update(campus,true),admin).andExpect(status().isOk()));
+        assertThat(legacy.get("bookingScope").asText()).isEqualTo("CAMPUS");
+        var explicitNull=new LinkedHashMap<>(update(legacy,true));explicitNull.put("bookingScope",null);
+        json(put(path),explicitNull,admin).andExpect(status().isOk()).andExpect(jsonPath("$.bookingScope").value("CAMPUS"));
+        json(put(path),body,admin).andExpect(status().isConflict());
+        mvc.perform(get("/internal/v1/resources/"+room.get("id").asText()).header("Authorization","Bearer "+M1))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.bookingScope").value("CAMPUS"));
+        seed("scope-manager",SCI,"SPACE_MANAGER");Cookie manager=login("scope-manager");
+        json(put(path),update(legacy,true),manager).andExpect(status().isForbidden());
+    }
+
+    @Test void roomScopeCanBeChosenOnCreateAndRejectsWrongResourceTypes() throws Exception {
+        var nodes=hierarchy(EIE);
+        var body=resource("ROOM",nodes[1].get("id").asText(),EIE);body.put("bookingScope","CAMPUS");
+        assertThat(create(body,admin).get("bookingScope").asText()).isEqualTo("CAMPUS");
+        body.put("bookingScope","UNKNOWN");json(post("/api/v1/resources"),body,admin).andExpect(status().isBadRequest());
+        var seat=resource("SEAT",nodes[2].get("id").asText(),EIE);seat.put("bookingScope","DEPARTMENT");
+        json(post("/api/v1/resources"),seat,admin).andExpect(status().isBadRequest());
+        var updateBuilding=new LinkedHashMap<>(update(nodes[1],true));updateBuilding.put("bookingScope","CAMPUS");
+        json(put("/api/v1/resources/"+nodes[1].get("id").asText()),updateBuilding,admin).andExpect(status().isBadRequest());
+    }
+
+    @Test void legacyNullScopeIsConservativeAndDatabaseRejectsInvalidScopes() throws Exception {
+        var nodes=hierarchy(EIE);UUID id=UUID.fromString(nodes[2].get("id").asText());
+        db.update("update resources set booking_scope=null where id=?",id);
+        mvc.perform(get("/api/v1/resources/"+id).cookie(admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.bookingScope").value("DEPARTMENT"));
+        assertThatThrownBy(()->db.update("update resources set booking_scope='UNKNOWN' where id=?",id)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(()->db.update("update resources set booking_scope='CAMPUS' where id=?",
+                UUID.fromString(nodes[1].get("id").asText()))).isInstanceOf(DataAccessException.class);
+    }
+
+    @Test void powerOutletMarkerBelongsToIndividualSeatsAndRoundTrips() throws Exception {
+        var nodes=hierarchy(EIE);var seat=resource("SEAT",nodes[2].get("id").asText(),EIE);
+        seat.put("features",List.of("POWER_OUTLET","靠窗"));var created=create(seat,admin);
+        mvc.perform(get("/internal/v1/resources/"+created.get("id").asText()).header("Authorization","Bearer "+M1))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.features[0]").value("POWER_OUTLET"));
+        var room=new LinkedHashMap<>(update(nodes[2],true));room.put("features",List.of("POWER_OUTLET"));
+        json(put("/api/v1/resources/"+nodes[2].get("id").asText()),room,admin).andExpect(status().isBadRequest());
+        var changed=new LinkedHashMap<>(update(created,true));changed.put("features",List.of("靠窗"));
+        json(put("/api/v1/resources/"+created.get("id").asText()),changed,admin)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.features.length()").value(1));
+    }
+
+    @Test void v2DatabaseUpgradesWithoutGrantingRolesOrGuessingOutletLabels() {
+        String schema="upgrade_"+UUID.randomUUID().toString().replace("-","");
+        var dataSource=new org.postgresql.ds.PGSimpleDataSource();
+        dataSource.setURL(PG.getJdbcUrl("postgres","postgres"));dataSource.setCurrentSchema(schema);
+        try {
+            Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).target("2").load().migrate();
+            var legacy=new JdbcTemplate(dataSource);UUID campus=UUID.randomUUID(),building=UUID.randomUUID(),room=UUID.randomUUID(),seat=UUID.randomUUID(),user=UUID.randomUUID();
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity) values(?,'CAMPUS',null,'C','campus',null,0)",campus);
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity) values(?,'BUILDING',?,'B','building',null,0)",building,campus);
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity) values(?,'ROOM',?,'R','room',?,1)",room,building,EIE);
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity,features) values(?,'SEAT',?,'S','seat',?,1,'[\"电源\"]'::jsonb)",seat,room,EIE);
+            legacy.update("insert into app_users(id,username,display_name,password_hash,department_id) values(?,'legacy','legacy','unused-test-hash',?)",user,EIE);
+            legacy.update("insert into user_roles values(?,'MEMBER')",user);
+            long version=legacy.queryForObject("select version from resources where id=?",Long.class,room);
+            var upgraded=Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load();
+            assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(5);
+            assertThat(upgraded.migrate().migrationsExecuted).isZero();
+            assertThat(legacy.queryForObject("select booking_scope from resources where id=?",String.class,room)).isEqualTo("DEPARTMENT");
+            assertThat(legacy.queryForObject("select version from resources where id=?",Long.class,room)).isGreaterThan(version);
+            assertThat(legacy.queryForList("select role_code from user_roles where user_id=?",String.class,user)).containsExactly("MEMBER");
+            assertThat(legacy.queryForObject("select features::text from resources where id=?",String.class,seat)).isEqualTo("[\"电源\"]");
+            // An older D binary can still insert a room without knowing the new column.
+            legacy.update("insert into resources(id,type,parent_id,code,name,department_id,capacity) values(?,'ROOM',?,'OLD','old writer',?,1)",UUID.randomUUID(),building,EIE);
+        } finally { db.execute("drop schema if exists "+schema+" cascade"); }
     }
 }

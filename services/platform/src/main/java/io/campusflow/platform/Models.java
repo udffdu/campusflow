@@ -14,7 +14,7 @@ public final class Models {
     public record Permission(String code,String name,boolean globalOnly) {}
     public record RoleWrite(@NotBlank @Pattern(regexp="[A-Z][A-Z0-9_]{2,31}") String code,
                              @NotBlank @Size(max=64) String name, @NotEmpty @Size(max=32) Set<String> permissions) {}
-    public record Identity(UUID id, String username, String displayName, UUID departmentId, boolean active,
+    public record Identity(UUID id, String username, String displayName, String email, UUID departmentId, boolean active,
                            List<String> roles, Set<String> permissions) {
         public boolean admin() { return roles.contains("ADMIN"); }
     }
@@ -22,22 +22,40 @@ public final class Models {
     public record PasswordChange(@NotBlank @Size(max=72) String currentPassword,
                                  @NotBlank @Size(min=12,max=72) String newPassword) {}
     public record UserCreate(@NotBlank @Pattern(regexp="[a-zA-Z0-9._-]{3,48}") String username,
-                             @NotBlank @Size(max=64) String displayName, @NotNull UUID departmentId,
-                             @NotEmpty @Size(max=16) Set<String> roles, @NotBlank @Size(min=12,max=72) String password) {}
-    public record UserUpdate(@NotBlank @Size(max=64) String displayName, @NotNull UUID departmentId,
-                             @NotEmpty @Size(max=16) Set<String> roles, boolean active) {}
+                             @NotBlank @Size(max=64) String displayName,
+                             @Email @Size(max=254) String email, @NotNull UUID departmentId,
+                             @NotEmpty @Size(max=16) Set<String> roles, @NotBlank @Size(min=12,max=72) String password) {
+        public UserCreate(String username,String displayName,UUID departmentId,Set<String> roles,String password){this(username,displayName,null,departmentId,roles,password);}
+    }
+    public record UserUpdate(@NotBlank @Size(max=64) String displayName,
+                             @Email @Size(max=254) String email, @NotNull UUID departmentId,
+                             @NotEmpty @Size(max=16) Set<String> roles, boolean active) {
+        public UserUpdate(String displayName,UUID departmentId,Set<String> roles,boolean active){this(displayName,null,departmentId,roles,active);}
+    }
     public record OpeningHour(@Min(1) @Max(7) int day, @NotNull LocalTime start, @NotNull LocalTime end) {}
+    public enum BookingScope { DEPARTMENT, CAMPUS }
     public record Resource(UUID id, String type, UUID parentId, String code, String name, UUID departmentId,
                            int capacity, List<String> features, List<OpeningHour> openingHours,
-                           boolean active, boolean effectiveActive, long version, Instant updatedAt) {}
+                           boolean active, boolean effectiveActive, long version, Instant updatedAt, BookingScope bookingScope) {}
     public record ResourceCreate(@NotBlank @Pattern(regexp="CAMPUS|BUILDING|ROOM|SEAT") String type,
                                   UUID parentId, @NotBlank @Pattern(regexp="[A-Za-z0-9._-]{1,48}") String code,
                                   @NotBlank @Size(max=100) String name, UUID departmentId,
                                   @Min(0) @Max(10000) int capacity, @NotNull @Size(max=20) List<@NotBlank @Size(max=40) String> features,
-                                  @NotNull @Size(max=28) List<@Valid OpeningHour> openingHours, boolean active) {}
+                                  @NotNull @Size(max=28) List<@Valid OpeningHour> openingHours, boolean active, BookingScope bookingScope) {
+        public ResourceCreate(String type,UUID parentId,String code,String name,UUID departmentId,int capacity,
+                              List<String> features,List<OpeningHour> openingHours,boolean active) {
+            this(type,parentId,code,name,departmentId,capacity,features,openingHours,active,null);
+        }
+    }
     public record ResourceUpdate(@NotBlank @Size(max=100) String name, @Min(0) @Max(10000) int capacity,
                                   @NotNull @Size(max=20) List<@NotBlank @Size(max=40) String> features,
-                                  @NotNull @Size(max=28) List<@Valid OpeningHour> openingHours, boolean active, @Min(1) long expectedVersion) {}
+                                  @NotNull @Size(max=28) List<@Valid OpeningHour> openingHours, boolean active,
+                                  @Min(1) long expectedVersion, BookingScope bookingScope) {
+        public ResourceUpdate(String name,int capacity,List<String> features,List<OpeningHour> openingHours,
+                              boolean active,long expectedVersion) {
+            this(name,capacity,features,openingHours,active,expectedVersion,null);
+        }
+    }
     public record NotificationEvent(@NotBlank @Pattern(regexp="[A-Za-z0-9._:-]{1,100}") String eventId,
                                      @NotNull UUID recipientId, @NotBlank @Size(max=100) String title,
                                      @NotBlank @Size(max=2000) String body,

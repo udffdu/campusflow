@@ -9,7 +9,7 @@ vi.mock('vue-router',()=>({useRoute:()=>({query:{}})}))
 const app={id:'a',applicantId:'applicant',applicantName:'申请人',departmentId:'EIE',roomId:'r',roomName:'A101',title:'课程讨论',purpose:'<img src=x onerror=alert(1)>',attendees:6,startAt:'2099-11-03T02:00:00Z',endAt:'2099-11-03T04:00:00Z',deadline:'2099-11-03T02:00:00Z',steps:[{name:'院系初审',permission:'rooms.review'},{name:'教室终审',permission:'rooms.approve'}],currentStep:0,status:'PENDING',version:4,attempts:0,needsAttention:false}
 let wrapper:ReturnType<typeof mount>|null=null
 beforeEach(()=>{
-  session.user={id:'reviewer',username:'reviewer',displayName:'审核员',departmentId:'EIE',active:true,roles:['ROOM_REVIEWER'],permissions:['rooms.read','rooms.review']}
+  session.user={id:'reviewer',username:'reviewer',displayName:'审核员',email:null,departmentId:'EIE',active:true,roles:['ROOM_REVIEWER'],permissions:['rooms.read','rooms.review']}
   apiMock.mockImplementation(async(path:string)=>path==='/room-applications/a'?{application:{...app},history:[],deliveries:[]}:{items:[{...app}],page:0,size:20,total:1})
 })
 afterEach(()=>{wrapper?.unmount();wrapper=null;vi.clearAllMocks()})

@@ -1,24 +1,34 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, message } from './api'
-import { can, refreshUnread, session } from './session'
+import { announceSessionChange, can, refreshUnread, session } from './session'
 import { roleNames } from './types'
 import Icon from './components/Icon.vue'
+import NotificationToastHost from './components/NotificationToastHost.vue'
+import {m1Get} from './m1Api'
+import {clearPendingReservations,type Capabilities} from './reservations'
+const demoAvailable=ref(false);const bookingAvailable=ref(false)
+watch(()=>session.user?.id,async (id,previous)=>{if(previous&&previous!==id)clearPendingReservations();demoAvailable.value=false;bookingAvailable.value=false;if(id&&can('seats.availability.read'))try{const caps=await m1Get<Capabilities>('/reservation-capabilities');if(session.user?.id===id){demoAvailable.value=caps.canCreateDemoReservation;bookingAvailable.value=!!caps.canCreateReservation}}catch{}},{immediate:true})
 import Modal from './components/Modal.vue'
 const route = useRoute(); const router = useRouter(); const menuOpen = ref(false)
 const passwordOpen = ref(false); const currentPassword = ref(''); const newPassword = ref(''); const error = ref(''); const busy = ref(false)
 const navigation = computed(() => [
   {path:'/',name:'工作台',icon:'grid',show:true}, {path:'/resources',name:'空间资源',icon:'space',show:can('spaces.read')},
   {path:'/room-applications',name:'教室申请',icon:'space',show:can('rooms.read')},
+  {path:'/seat-query',name:'座位查询',icon:'chair',show:can('seats.availability.read')},
+  {path:'/my-reservations',name:'我的预约',icon:'chair',show:can('seats.reservations.read.own')},
+  {path:'/seat-operations',name:'预约运营',icon:'grid',show:can('seats.operations.read')},
+  {path:'/seat-reservations',name:'座位预约',icon:'chair',show:bookingAvailable.value},
+  {path:'/seat-reservation-demo',name:'个人预约演示',icon:'chair',show:demoAvailable.value},
   {path:'/notifications',name:'通知中心',icon:'bell',show:true},
   {path:'/users',name:'账号与权限',icon:'users',show:can('users.manage')},
   {path:'/deliveries',name:'通知投递',icon:'send',show:can('notifications.manage')},
   {path:'/audit',name:'操作审计',icon:'audit',show:can('audit.read')},
 ].filter(item => item.show))
 const date = new Intl.DateTimeFormat('zh-CN',{month:'long',day:'numeric',weekday:'long'}).format(new Date())
-async function logout() { busy.value=true; error.value=''; try { await api('/auth/logout','POST'); session.user=null; session.unread=0; await router.replace('/login') } catch(e) {error.value=message(e)} finally {busy.value=false} }
-async function changePassword() { busy.value=true;error.value=''; try { await api('/auth/password','POST',{currentPassword:currentPassword.value,newPassword:newPassword.value}); passwordOpen.value=false;currentPassword.value='';newPassword.value='';session.user=null;await router.replace('/login?changed=1') } catch(e) {error.value=message(e)} finally {busy.value=false} }
+async function logout() { busy.value=true; error.value=''; try { await api('/auth/logout','POST'); announceSessionChange();clearPendingReservations(); session.user=null; session.unread=0; await router.replace('/login') } catch(e) {error.value=message(e)} finally {busy.value=false} }
+async function changePassword() { busy.value=true;error.value=''; try { await api('/auth/password','POST',{currentPassword:currentPassword.value,newPassword:newPassword.value}); announceSessionChange();clearPendingReservations();passwordOpen.value=false;currentPassword.value='';newPassword.value='';session.user=null;await router.replace('/login?changed=1') } catch(e) {error.value=message(e)} finally {busy.value=false} }
 let poll: ReturnType<typeof setInterval>
 onMounted(() => { poll=setInterval(() => { if(session.user) void refreshUnread().catch(()=>{}) },30000) })
 onUnmounted(() => clearInterval(poll))
@@ -41,5 +51,6 @@ onUnmounted(() => clearInterval(poll))
       <footer class="page-footer"><span>CampusFlow · 校园资源协同平台</span><span>有序连接，共享校园</span></footer>
     </div>
     <Modal v-if="passwordOpen" title="修改登录密码" @close="passwordOpen=false;currentPassword='';newPassword='' "><form class="form-body" @submit.prevent="changePassword"><p class="muted">修改后，所有设备的会话将退出，请重新登录。</p><label>当前密码<input v-model="currentPassword" type="password" autocomplete="current-password" required maxlength="72"></label><label>新密码<input v-model="newPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="72"><small>至少 12 个字符，中文等多字节字符总计不超过 72 字节。</small></label><p v-if="error" role="alert" class="form-error">{{error}}</p><div class="form-actions"><button type="button" class="button secondary" @click="passwordOpen=false">取消</button><button class="button" :disabled="busy">{{busy?'正在保存…':'保存并重新登录'}}</button></div></form></Modal>
+    <NotificationToastHost/>
   </div>
 </template>

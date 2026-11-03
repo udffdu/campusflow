@@ -11,7 +11,7 @@
 
 自有数据库会话不使用 HttpSession/自动会话认证策略；登录、退出与改密显式重置 CSRF，前端下一次写入前重新获取令牌。依据 [Spring Security 会话管理](https://docs.spring.io/spring-security/reference/servlet/authentication/session-management.html) 与 [CSRF 文档](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html) 配置，通过真实浏览器连续读取/写入回归验证。
 
-内部服务独立凭据识别来源；业务服务在线验证用户会话，仍负责自己的业务权限、对象与院系归属。当前权限目录只包含公共层权限，业务权限须评审后以迁移登记。
+内部服务独立凭据识别来源；业务服务在线验证用户会话，仍负责自己的业务权限、对象与院系归属。初版权限目录仅含公共层；2026-10-28当前用户授权直接补充三项个人座位权限/SEAT_USER、ROOM预约开放范围和座位插座标记，通过新增V3演进，说明见 [负责人交接](../handoffs/m1-integration.md)。其他业务权限与未决政策仍单独处理，不记作受影响负责人本人已评审。
 
 通知使用持久化站内信队列与事务收件箱，不引入消息集群；业务模块负责自己的 outbox。审计只接收有界结构化字段，不记录完整请求；触发器防常规 update/delete，不承诺抵抗数据库管理员篡改。
 
