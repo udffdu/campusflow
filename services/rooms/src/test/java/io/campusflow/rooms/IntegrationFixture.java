@@ -30,9 +30,11 @@ final class IntegrationFixture implements AutoCloseable {
             pg=EmbeddedPostgres.builder().setPort(0).setServerConfig("listen_addresses","127.0.0.1").start();
             try(var c=pg.getPostgresDatabase().getConnection();var s=c.createStatement()){s.execute("create database platform");}
             try(var socket=new ServerSocket(0)){platformPort=socket.getLocalPort();}
-            Path jar=Path.of("../platform/target/platform-0.1.0-SNAPSHOT.jar").toAbsolutePath();
+            Path jar=Path.of(System.getProperty("rooms.test.platform-jar","../platform/target/platform-0.1.0-SNAPSHOT.jar")).toAbsolutePath();
             if(!Files.exists(jar))throw new IllegalStateException("Build services/platform with ./mvnw verify before M2 integration tests");
             var builder=new ProcessBuilder(Path.of(System.getProperty("java.home"),"bin/java").toString(),"-jar",jar.toString());
+            String extraMigrations=System.getProperty("rooms.test.extra-platform-migrations");
+            if(extraMigrations!=null)builder.command().add("--spring.flyway.locations=classpath:db/migration,filesystem:"+Path.of(extraMigrations).toAbsolutePath());
             var env=builder.environment();env.put("DATABASE_URL",pg.getJdbcUrl("postgres","platform"));env.put("DATABASE_USER","postgres");env.put("DATABASE_PASSWORD","");env.put("BOOTSTRAP_ADMIN_PASSWORD",PASSWORD);env.put("COOKIE_SECURE","false");env.put("PORT",""+platformPort);env.put("M2_SERVICE_KEY",KEY);env.put("M1_SERVICE_KEY","");env.put("M3_SERVICE_KEY","");
             platform=builder.redirectErrorStream(true).redirectOutput(Path.of("target/platform-integration.log").toFile()).start();
             boolean ready=false;

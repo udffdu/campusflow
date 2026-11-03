@@ -7,6 +7,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 public final class Models {
     private Models() {}
+    // D may add profile fields (e.g. email) without changing M2's authorization contract.
+    @JsonIgnoreProperties(ignoreUnknown=true)
     public record Identity(UUID id, String username, String displayName, UUID departmentId,
                            boolean active, List<String> roles, Set<String> permissions) {
         public boolean admin() { return roles.contains("ADMIN"); }

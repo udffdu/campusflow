@@ -30,6 +30,9 @@ public class RemoteServices {
         var result=call(platform,platformKey,"POST","/internal/v1/authorization",Map.of("sessionToken",token,"permission","rooms.read"),Authorization.class,false);
         if(result==null||result.identity()==null||!result.identity().active()) throw new ApiException(org.springframework.http.HttpStatus.UNAUTHORIZED,"UNAUTHENTICATED","请先登录");
         if(!result.allowed()) throw ApiException.denied();
+        var identity=result.identity();
+        if(identity.id()==null||identity.departmentId()==null||identity.roles()==null||identity.permissions()==null)
+            throw ApiException.unavailable("INVALID_AUTHORIZATION_RESPONSE");
         return result.identity();
     }
     public Resource resource(UUID id) { return call(platform,platformKey,"GET","/internal/v1/resources/"+id,null,Resource.class,false); }
