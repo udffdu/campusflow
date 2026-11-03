@@ -1,6 +1,6 @@
 {
   "register_status": "partial_draft",
-  "coverage_note": "启动阶段的 M2/D、集成及工程要求登记。M1/M3 全量需求由各负责人补充；不宣称完整覆盖或已冻结。",
+  "coverage_note": "M3按最终规则分阶段重建；当前仅任务1A。后续管理、派单、维修及真实D接入仍未完成。",
   "requirements": [
     {
       "id": "CF-M2-001",
@@ -265,6 +265,64 @@
         "apps/web/src/components/NotificationsView.test.ts",
         "docs/process/d-validation.md"
       ]
+    },
+    {
+      "id": "CF-M3-001",
+      "module": "M3",
+      "title": "故障上报",
+      "baseline_status": "proposed",
+      "status": "implemented",
+      "acceptance": [
+        "授权登录用户为有效 ROOM 上报故障，生成唯一工单号并记录真实报修人、房间来源和待派单状态",
+        "无效会话、越权、无效房间及非法类型或描述被拒绝且无业务数据落库；具体字段限制见 docs/requirements/m3.md 待评审规则",
+        "相同幂等键同内容重试返回同一工单，不同内容冲突；创建、历史和待发送事件原子提交"
+      ],
+      "progress_note": "按最终Format规则重建任务1A；内部验证和人工验收见本阶段记录，真实D联调未完成。管理查询、人员选择、派单和独立历史接口尚未进入重建阶段。",
+      "implementation": [
+        "services/maintenance/src/main",
+        "docs/requirements/m3-reporting-decisions.md"
+      ],
+      "verification": [
+        "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
+        "docs/process/m3-rebuild-task1a-validation.md"
+      ]
+    },
+    {
+      "id": "CF-M3-002",
+      "module": "M3",
+      "title": "工单查询与数据范围",
+      "baseline_status": "proposed",
+      "status": "in_progress",
+      "acceptance": [
+        "报修人仅能分页查询本人记录和详情，管理员仅查询授权范围，列表统计也不得泄露其他范围数据",
+        "猜测他人工单 ID、修改筛选或分页不能越权；失效或停用账号被拒绝",
+        "查询不泄露凭据或未授权用户资料，房间停用不删除历史工单；覆盖 docs/requirements/m3.md 中 R02 验收场景"
+      ],
+      "progress_note": "按最终Format规则重建任务1A；内部验证和人工验收见本阶段记录，真实D联调未完成。管理查询、人员选择、派单和独立历史接口尚未进入重建阶段。",
+      "implementation": [
+        "services/maintenance/src/main",
+        "docs/requirements/m3-reporting-decisions.md"
+      ],
+      "verification": [
+        "services/maintenance/src/test/java/io/campusflow/maintenance/ReportingTest.java",
+        "docs/process/m3-rebuild-task1a-validation.md"
+      ]
+    },
+    {
+      "id": "CF-M3-003",
+      "module": "M3",
+      "title": "管理员派单",
+      "baseline_status": "proposed",
+      "status": "planned",
+      "acceptance": [
+        "具有派单业务权限且覆盖工单范围的管理员，只能向有效合资格且范围匹配的维修人员派单；资格接口待 D 评审",
+        "派单原子记录人员、真实操作者、时间、状态历史和版本；无权限、非法状态、过期版本均拒绝",
+        "同键同内容重放不重复生效，同键不同内容冲突；同版本并发派给不同人员只有一个成功且不能错误覆盖",
+        "通知和审计待发送事件随派单事务保存，D 故障不撤销业务结果，重试保持 eventId；覆盖文档 R03 场景"
+      ],
+      "implementation": [],
+      "verification": [],
+      "progress_note": "按最终Format规则重建任务1A；内部验证和人工验收见本阶段记录，真实D联调未完成。管理查询、人员选择、派单和独立历史接口尚未进入重建阶段。"
     }
   ]
 }

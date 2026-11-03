@@ -1,0 +1,24 @@
+server:
+  port: ${M3_PORT:8083}
+  error:
+    include-message: never
+    include-stacktrace: never
+spring:
+  application:
+    name: campusflow-maintenance
+  datasource:
+    url: ${M3_DATABASE_URL}
+    username: ${M3_DATABASE_USER}
+    password: ${M3_DATABASE_PASSWORD}
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  flyway:
+    enabled: true
+maintenance:
+  d-url: ${M3_D_URL}
+  service-key: ${M3_SERVICE_KEY}
+  cookie-secure: ${M3_COOKIE_SECURE:true}
+logging:
+  level:
+    org.springframework.security: WARN

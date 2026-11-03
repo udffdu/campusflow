@@ -1,0 +1,94 @@
+{
+  "module": "M3",
+  "purpose": "Persist stable task context without accepting unresolved business proposals",
+  "authorization": {
+    "current_stage": "rebuild_task1a_user_accepted",
+    "business_implementation_authorized": true,
+    "current_task_scope": [
+      "reporting_backend",
+      "own_queries",
+      "V1_migration",
+      "creation_history_final_format",
+      "tests",
+      "reconstruction_records"
+    ],
+    "current_task_exclusions": [
+      "frontend",
+      "management",
+      "candidates",
+      "dispatch",
+      "history_endpoint",
+      "D_changes",
+      "proxy_activation",
+      "repair"
+    ],
+    "current_task_review": "docs/requirements/m3-reporting-task-review.md",
+    "user_responsibility": [
+      "fault_reporting",
+      "own_and_scoped_queries",
+      "dispatch"
+    ],
+    "requirement_ids": [
+      "CF-M3-001",
+      "CF-M3-002",
+      "CF-M3-003"
+    ],
+    "excluded_from_current_task": [
+      "repair_execution",
+      "timeout_escalation",
+      "completion",
+      "acceptance",
+      "evaluation",
+      "M1_maintenance_block_mutations",
+      "optional_business_agent",
+      "cloud_purchase"
+    ]
+  },
+  "stable_constraints": [
+    "Reuse D identity and resource APIs; never access another module business tables or share ORM entities",
+    "Actor identity comes from server-validated CF_SESSION; reject client-forged identity",
+    "Require D authorization allowed=true; identity presence alone is insufficient",
+    "Keep service secrets server-side and out of logs",
+    "Do not substitute D public permissions for M3 business permissions",
+    "Do not bypass missing dependencies or present test doubles as completed real integration",
+    "Plan before implementation; explicit scope, constraints and acceptance criteria for every AI task",
+    "Human verification before commit; peer review; humans resolve merge conflicts",
+    "Use versioned migrations and idempotent seed scripts; no manual schema changes",
+    "Preserve unfinished requirements and distinguish proposed rules, implementation and verified evidence"
+  ],
+  "dependency_snapshot": {
+    "basis": "local repository source inspection; recheck before integration",
+    "D_existing": [
+      "session_authorization",
+      "resource_master_data",
+      "notification_receipts_and_delivery",
+      "audit_ingestion"
+    ],
+    "D_pending": [
+      "M3_permissions_and_role_mapping",
+      "assignee_discovery",
+      "assignee_eligibility_validation",
+      "scope_and_connection_agreements"
+    ],
+    "M1": "Maintenance block contract is a draft; outside current reporting/query/dispatch implementation scope"
+  },
+  "pending_human_decisions": [
+    "D business permission registration and role mapping review",
+    "Shared ingress and M3 independent CSRF integration review",
+    "Dedicated database role provisioning and peer schema review",
+    "Assignee eligibility and qualification-change race semantics",
+    "Reassignment and cancellation scope",
+    "Outbox delivery ownership and long-term retention policy"
+  ],
+  "sources": {
+    "rules": "AGENTS.md",
+    "requirements": "docs/requirements/m3.md",
+    "register": "spec/requirements.json",
+    "D_contract": "contracts/platform-api.md",
+    "format": "contracts/m3-work-order-format-v1.md",
+    "reporting_decisions": "docs/requirements/m3-reporting-decisions.md",
+    "reconstruction": "docs/process/m3-reconstruction-plan.md",
+    "verification": "docs/process/m3-rebuild-task1a-validation.md"
+  },
+  "change_policy": "Update this context when the user explicitly changes scope or rules; external contracts and schema changes still require affected-owner review. Do not infer acceptance from a recommendation."
+}
