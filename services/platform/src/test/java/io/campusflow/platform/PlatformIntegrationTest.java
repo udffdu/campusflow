@@ -247,6 +247,76 @@ class PlatformIntegrationTest {
         assertThat(db.queryForMap("select status,attempts from email_notification_tasks where id=?",id))
                 .containsEntry("status","DELIVERED").containsEntry("attempts",2);
     }
+    @Test void staleEmailCallbacksCannotOverwriteReclaimedDelivery()throws Exception{
+        UUID recipient=seed("fenced-mail",EIE,"MEMBER");
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        var old=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",id);
+        var current=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        assertThat(current.token()).isNotEqualTo(old.token());
+        assertThat(emails.prepareDelivery(old)).isFalse();assertThat(emails.prepareDelivery(current)).isTrue();
+        emails.failed(old,"EMAIL_DELIVERY_FAILED");emails.delivered(old);
+        assertThat(db.queryForMap("select status,attempts,claim_token from email_notification_tasks where id=?",id))
+                .containsEntry("status","DELIVERING").containsEntry("attempts",2).containsEntry("claim_token",current.token());
+        emails.delivered(current);emails.failed(old,"EMAIL_DELIVERY_FAILED");
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,id)).isEqualTo("DELIVERED");
+    }
+    @Test void manualEmailRetryCannotReuseOldClaimEvenWhenAttemptsReset()throws Exception{
+        UUID recipient=seed("manual-mail",EIE,"MEMBER");
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        var old=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        emails.failed(old,"EMAIL_DELIVERY_FAILED");emails.retry(id);
+        var current=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        assertThat(current.attempts()).isEqualTo(old.attempts());assertThat(current.token()).isNotEqualTo(old.token());
+        emails.delivered(old);emails.failed(old,"EMAIL_DELIVERY_FAILED");
+        assertThat(emails.prepareDelivery(old)).isFalse();assertThat(emails.prepareDelivery(current)).isTrue();
+        emails.failed(current,"EMAIL_CHANNEL_DISABLED");
+        assertThat(db.queryForMap("select status,last_error from email_notification_tasks where id=?",id))
+                .containsEntry("status","RETRY").containsEntry("last_error","EMAIL_CHANNEL_DISABLED");
+    }
+    @Test void expiredEmailClaimCannotPrepareOrCompleteBeforeReclaim()throws Exception{
+        UUID recipient=seed("expired-mail",EIE,"MEMBER");
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        var claim=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+        db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",id);
+        assertThat(emails.prepareDelivery(claim)).isFalse();emails.delivered(claim);emails.failed(claim,"EMAIL_DELIVERY_FAILED");
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,id)).isEqualTo("DELIVERING");
+    }
+    @Test void slowSmtpFailureCannotOverwriteAnotherWorkersSuccess()throws Exception{
+        UUID recipient=seed("slow-mail",EIE,"MEMBER");
+        UUID id=UUID.fromString(node(internal("/email-notifications",event(recipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        var reclaimed=new EmailNotificationService.Claim[1];
+        // Pause at the external boundary: worker B reclaims while worker A is inside SMTP.
+        org.mockito.Mockito.doAnswer(invocation->{
+            db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",id);
+            var current=emails.claim(1,java.time.Duration.ofMinutes(1)).getFirst();
+            reclaimed[0]=current;
+            throw new IllegalStateException("injected SMTP timeout");
+        }).when(mail).send(org.mockito.ArgumentMatchers.eq(id),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        emailWorker.deliver();
+        assertThat(emails.prepareDelivery(reclaimed[0])).isTrue();
+        emails.delivered(reclaimed[0]);
+        assertThat(db.queryForMap("select status,attempts from email_notification_tasks where id=?",id))
+                .containsEntry("status","DELIVERED").containsEntry("attempts",2);
+    }
+    @Test void workerSkipsBatchEntriesWhoseLeaseExpiredWhileWaitingForSmtp()throws Exception{
+        UUID firstRecipient=seed("batch-first",EIE,"MEMBER"),secondRecipient=seed("batch-second",EIE,"MEMBER");
+        UUID first=UUID.fromString(node(internal("/email-notifications",event(firstRecipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        UUID second=UUID.fromString(node(internal("/email-notifications",event(secondRecipient),M1).andExpect(status().isAccepted())).get("id").asText());
+        db.update("update email_notification_tasks set next_attempt_at='2000-01-01' where id=?",first);
+        db.update("update email_notification_tasks set next_attempt_at='2000-01-02' where id=?",second);
+        org.mockito.Mockito.doAnswer(invocation->{
+            db.update("update email_notification_tasks set lease_until='1970-01-01' where id=?",second);return null;
+        }).when(mail).send(org.mockito.ArgumentMatchers.eq(first),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        emailWorker.deliver();
+        org.mockito.Mockito.verify(mail,org.mockito.Mockito.never()).send(org.mockito.ArgumentMatchers.eq(second),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,first)).isEqualTo("DELIVERED");
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,second)).isEqualTo("DELIVERING");
+        emailWorker.deliver();
+        org.mockito.Mockito.verify(mail).send(org.mockito.ArgumentMatchers.eq(second),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        assertThat(db.queryForObject("select status from email_notification_tasks where id=?",String.class,second)).isEqualTo("DELIVERED");
+    }
+
     @Test void serviceIdentityCannotBeForgedAndIntrospectionChecksLiveScope() throws Exception {
         internal("/authorization",new Authorization(admin.getValue(),"users.manage",SCI),"wrong").andExpect(status().isUnauthorized());
         internal("/authorization",new Authorization(admin.getValue(),"users.manage",SCI),M1).andExpect(jsonPath("$.allowed").value(true));
@@ -267,7 +337,7 @@ class PlatformIntegrationTest {
         assertThatThrownBy(()->db.update("delete from audit_events where id=?",UUID.fromString(id))).isInstanceOf(DataAccessException.class);
     }
     @Test void migrationsCanReplayWithoutChangingAppliedHistory() {
-        assertThat(flyway.info().applied()).hasSize(5);assertThat(flyway.migrate().migrationsExecuted).isZero();
+        assertThat(flyway.info().applied()).hasSize(6);assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
     @Test void customRolesCannotGrantGlobalPrivilegesAndChangesAreImmediate() throws Exception {
         json(post("/api/v1/roles"),new RoleWrite("LIBRARIAN","图书馆空间维护",Set.of("spaces.read","spaces.write")),admin).andExpect(status().isCreated());
@@ -394,7 +464,7 @@ class PlatformIntegrationTest {
             legacy.update("insert into user_roles values(?,'MEMBER')",user);
             long version=legacy.queryForObject("select version from resources where id=?",Long.class,room);
             var upgraded=Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load();
-            assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(3);
+            assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(4);
             assertThat(upgraded.migrate().migrationsExecuted).isZero();
             assertThat(legacy.queryForObject("select booking_scope from resources where id=?",String.class,room)).isEqualTo("DEPARTMENT");
             assertThat(legacy.queryForObject("select version from resources where id=?",Long.class,room)).isGreaterThan(version);

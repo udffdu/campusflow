@@ -40,6 +40,55 @@ class ReminderStoreTest {
         assertEquals(1,store(NOW).scheduleDue(10));
         assertEquals(id,jdbc.queryForObject("select reservation_id from m1.outbox_events where event_type=?",UUID.class,ReminderStore.START));
     }
+    @Test void repeatedSmallBatchesDrainBothReminderTypesWithoutDuplicates(){
+        var starts=new HashSet<UUID>();var lates=new HashSet<UUID>();
+        for(int i=0;i<5;i++){
+            starts.add(reservation(NOW.plusSeconds(600),"CONFIRMED"));
+            lates.add(reservation(NOW.minusSeconds(600),"CONFIRMED"));
+        }
+        var store=store(NOW);
+        for(int i=0;i<5;i++)assertEquals(2,store.scheduleDue(2));
+        assertEquals(0,store.scheduleDue(2));
+        assertEquals(starts,new HashSet<>(jdbc.queryForList("select reservation_id from m1.outbox_events where event_type=?",UUID.class,ReminderStore.START)));
+        assertEquals(lates,new HashSet<>(jdbc.queryForList("select reservation_id from m1.outbox_events where event_type=?",UUID.class,ReminderStore.LATE)));
+        assertEquals(10,jdbc.queryForObject("select count(*) from m1.outbox_events",Integer.class));
+    }
+    @Test void existingStartEventDoesNotSuppressLaterReminderForSameReservation(){
+        UUID id=reservation(NOW.plusSeconds(600),"CONFIRMED");
+        assertEquals(1,store(NOW).scheduleDue(2));
+        assertEquals(1,store(NOW.plusSeconds(1200)).scheduleDue(2));
+        assertEquals(2,jdbc.queryForObject("select count(*) from m1.outbox_events where reservation_id=?",Integer.class,id));
+    }
+    @Test void concurrentSmallBatchesEventuallyCoverEveryCandidate()throws Exception{
+        for(int i=0;i<9;i++)reservation(NOW.plusSeconds(600),"CONFIRMED");
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
+            var a=pool.submit(()->{for(int i=0;i<10;i++)store(NOW).scheduleDue(2);});
+            var b=pool.submit(()->{for(int i=0;i<10;i++)store(NOW).scheduleDue(2);});
+            a.get();b.get();
+        }
+        assertEquals(9,jdbc.queryForObject("select count(*) from m1.outbox_events",Integer.class));
+        assertEquals(0,store(NOW).scheduleDue(2));
+    }
+    @Test void staleDeliveryCannotPrepareOrOverwriteNewOwner(){
+        reservation(NOW.plusSeconds(600),"CONFIRMED");var first=store(NOW);first.scheduleDue(10);
+        var old=first.claimDue(1,Duration.ofMinutes(1)).getFirst();
+        var later=store(NOW.plusSeconds(61));var current=later.claimDue(1,Duration.ofMinutes(1)).getFirst();
+        assertFalse(later.prepareDelivery(old));
+        later.retry(old,"D_UNAVAILABLE",Duration.ofSeconds(5),Duration.ofMinutes(5));
+        later.delivered(old);
+        assertEquals("DELIVERING",jdbc.queryForObject("select status from m1.outbox_events",String.class));
+        assertTrue(later.prepareDelivery(current));later.delivered(current);
+        later.retry(old,"D_UNAVAILABLE",Duration.ofSeconds(5),Duration.ofMinutes(5));
+        assertEquals("DELIVERED",jdbc.queryForObject("select status from m1.outbox_events",String.class));
+    }
+    @Test void expiredUnreclaimedDeliveryCannotSendOrChangeState(){
+        reservation(NOW.plusSeconds(600),"CONFIRMED");var first=store(NOW);first.scheduleDue(10);
+        var claim=first.claimDue(1,Duration.ofMinutes(1)).getFirst();var expired=store(NOW.plusSeconds(60));
+        assertFalse(expired.prepareDelivery(claim));expired.delivered(claim);
+        expired.retry(claim,"D_UNAVAILABLE",Duration.ofSeconds(5),Duration.ofMinutes(5));
+        assertEquals("DELIVERING",jdbc.queryForObject("select status from m1.outbox_events",String.class));
+        assertEquals(2,expired.claimDue(1,Duration.ofMinutes(1)).getFirst().attempts());
+    }
     @Test void concurrentScannersStillCreateOneBusinessEvent()throws Exception{
         reservation(NOW.plus(Duration.ofMinutes(10)),"CONFIRMED");
         try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
@@ -57,7 +106,7 @@ class ReminderStoreTest {
         store(NOW.plus(Duration.ofMinutes(2))).retry(recovered,"D_UNAVAILABLE",Duration.ofSeconds(5),Duration.ofMinutes(5));
         assertTrue(store(NOW.plusSeconds(124)).claimDue(10,Duration.ofMinutes(1)).isEmpty());
         var retried=store(NOW.plusSeconds(130)).claimDue(10,Duration.ofMinutes(1)).getFirst();assertEquals(3,retried.attempts());
-        store(NOW.plusSeconds(130)).delivered(retried.eventId());
+        store(NOW.plusSeconds(130)).delivered(retried);
         assertEquals("DELIVERED",jdbc.queryForObject("select status from m1.outbox_events",String.class));
         assertNotNull(jdbc.queryForObject("select delivered_at from m1.outbox_events",Timestamp.class));
     }
@@ -71,7 +120,7 @@ class ReminderStoreTest {
         var violationNotice=store.claimDue(10,Duration.ofMinutes(1)).getFirst();
         assertEquals(ReminderStore.NO_SHOW,violationNotice.eventType());
         assertTrue(store.prepareDelivery(violationNotice));
-        store.delivered(violationNotice.eventId());
+        store.delivered(violationNotice);
 
         UUID stale=reservation(NOW.plus(Duration.ofMinutes(10)),"CONFIRMED");
         assertEquals(1,store.scheduleDue(10));

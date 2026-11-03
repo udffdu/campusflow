@@ -31,7 +31,7 @@ public final class ReminderWorker {
                 var room=call.room(event.roomId());
                 var seat=call.seat(event.seatId());
                 call.reminder(notification(event,room,seat));
-                store.delivered(event.eventId());
+                store.delivered(event);
             }
             catch(Exception exception){store.retry(event,"D_UNAVAILABLE",retryBase,retryMax);}
         }

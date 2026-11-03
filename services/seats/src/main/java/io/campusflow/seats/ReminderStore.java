@@ -32,17 +32,21 @@ public final class ReminderStore {
         if(limit<1||limit>1000)throw new IllegalArgumentException("reminder scan limit");
         Integer result=transaction.execute(ignored->{
             Instant now=clock.instant();int start=schedule(START,jdbc.query("""
-                    select id,user_id,room_id,seat_id,start_at,end_at from m1.reservations
+                    select id,user_id,room_id,seat_id,start_at,end_at from m1.reservations r
                     where status='CONFIRMED' and start_at>? and start_at<=?
+                      and not exists (select 1 from m1.outbox_events o
+                          where o.reservation_id=r.id and o.event_type=?)
                     order by start_at,id limit ? for update skip locked
-                    """,(row,index)->candidate(row),Timestamp.from(now),Timestamp.from(now.plus(Duration.ofMinutes(15))),limit));
+                    """,(row,index)->candidate(row),Timestamp.from(now),Timestamp.from(now.plus(Duration.ofMinutes(15))),START,limit));
             int remaining=Math.max(0,limit-start);
             int late=remaining==0?0:schedule(LATE,jdbc.query("""
-                    select id,user_id,room_id,seat_id,start_at,end_at from m1.reservations
+                    select id,user_id,room_id,seat_id,start_at,end_at from m1.reservations r
                     where status='CONFIRMED' and start_at>? and start_at<=?
+                      and not exists (select 1 from m1.outbox_events o
+                          where o.reservation_id=r.id and o.event_type=?)
                     order by start_at,id limit ? for update skip locked
                     """,(row,index)->candidate(row),Timestamp.from(now.minus(Duration.ofMinutes(15))),
-                    Timestamp.from(now.minus(Duration.ofMinutes(10))),remaining));
+                    Timestamp.from(now.minus(Duration.ofMinutes(10))),LATE,remaining));
             return start+late;
         });
         return result==null?0:result;
@@ -91,8 +95,9 @@ public final class ReminderStore {
             var row=jdbc.query("""
                     select o.event_type,o.status,r.status as reservation_status
                     from m1.outbox_events o join m1.reservations r on r.id=o.reservation_id
-                    where o.event_id=? for update of o
-                    """,(rs,index)->new String[]{rs.getString(1),rs.getString(2),rs.getString(3)},delivery.eventId())
+                    where o.event_id=? and o.attempts=? and o.claimed_until>? for update of o
+                    """,(rs,index)->new String[]{rs.getString(1),rs.getString(2),rs.getString(3)},
+                    delivery.eventId(),delivery.attempts(),Timestamp.from(clock.instant()))
                     .stream().findFirst().orElse(null);
             if(row==null||!"DELIVERING".equals(row[1]))return false;
             boolean eligible=(NO_SHOW.equals(row[0])&&"NO_SHOW".equals(row[2]))
@@ -106,10 +111,11 @@ public final class ReminderStore {
         });
         return Boolean.TRUE.equals(result);
     }
-    public void delivered(UUID eventId){transaction.executeWithoutResult(ignored->jdbc.update("""
+    // attempts is a monotonic claim generation here; unlike email retries it is never reset.
+    public void delivered(Delivery delivery){transaction.executeWithoutResult(ignored->jdbc.update("""
             update m1.outbox_events set status='DELIVERED',claimed_until=null,delivered_at=?,last_error=null
-            where event_id=? and status='DELIVERING'
-            """,Timestamp.from(clock.instant()),eventId));}
+            where event_id=? and status='DELIVERING' and attempts=? and claimed_until>?
+            """,Timestamp.from(clock.instant()),delivery.eventId(),delivery.attempts(),Timestamp.from(clock.instant())));}
     public void retry(Delivery delivery,String reason,Duration base,Duration maximum){
         if(base.isNegative()||base.isZero()||maximum.compareTo(base)<0)throw new IllegalArgumentException("reminder retry settings");
         long factor=1L<<Math.min(20,Math.max(0,delivery.attempts()-1));
@@ -118,7 +124,7 @@ public final class ReminderStore {
         Duration finalDelay=delay;
         transaction.executeWithoutResult(ignored->jdbc.update("""
                 update m1.outbox_events set status='PENDING',claimed_until=null,next_attempt_at=?,last_error=?
-                where event_id=? and status='DELIVERING'
-                """,Timestamp.from(clock.instant().plus(finalDelay)),safe,delivery.eventId()));
+                where event_id=? and status='DELIVERING' and attempts=? and claimed_until>?
+                """,Timestamp.from(clock.instant().plus(finalDelay)),safe,delivery.eventId(),delivery.attempts(),Timestamp.from(clock.instant())));
     }
 }

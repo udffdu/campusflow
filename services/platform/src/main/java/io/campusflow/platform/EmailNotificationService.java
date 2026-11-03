@@ -36,7 +36,7 @@ public class EmailNotificationService {
     }
     public Delivery get(UUID id,String source){return db.query("select * from email_notification_tasks where id=? and source=?",this::map,id,source).stream().findFirst().orElseThrow(ApiException::missing);}
 
-    record Claim(UUID id,String email,String title,String body,boolean recipientActive,int attempts){}
+    record Claim(UUID id,String email,String title,String body,boolean recipientActive,int attempts,UUID token){}
     @Transactional List<Claim> claim(int limit,Duration lease) {
         Instant now=clock.instant();
         var rows=db.query("""
@@ -46,25 +46,35 @@ public class EmailNotificationService {
                        or (t.status='DELIVERING' and t.lease_until<=?))
                 order by t.next_attempt_at,t.created_at,t.id
                 limit ? for update of t skip locked
-                """,(row,index)->new Claim(row.getObject(1,UUID.class),row.getString(2),row.getString(3),row.getString(4),row.getBoolean(5),row.getInt(6)+1),
+                """,(row,index)->new Claim(row.getObject(1,UUID.class),row.getString(2),row.getString(3),row.getString(4),row.getBoolean(5),row.getInt(6)+1,UUID.randomUUID()),
                 Timestamp.from(now),Timestamp.from(now),limit);
-        for(var row:rows)db.update("update email_notification_tasks set status='DELIVERING',attempts=?,lease_until=?,last_error=null where id=?",
-                row.attempts(),Timestamp.from(now.plus(lease)),row.id());
+        for(var row:rows)db.update("update email_notification_tasks set status='DELIVERING',attempts=?,lease_until=?,claim_token=?,last_error=null where id=?",
+                row.attempts(),Timestamp.from(now.plus(lease)),row.token(),row.id());
         return List.copyOf(rows);
     }
-    @Transactional void delivered(UUID id) {
-        db.update("update email_notification_tasks set status='DELIVERED',lease_until=null,last_error=null,delivered_at=? where id=? and status='DELIVERING'",
-                Timestamp.from(clock.instant()),id);
+    boolean prepareDelivery(Claim claim) {
+        return Boolean.TRUE.equals(db.queryForObject("""
+                select exists(select 1 from email_notification_tasks
+                    where id=? and status='DELIVERING' and claim_token=? and lease_until>?)
+                """,Boolean.class,claim.id(),claim.token(),Timestamp.from(clock.instant())));
+    }
+    @Transactional void delivered(Claim claim) {
+        db.update("""
+                update email_notification_tasks set status='DELIVERED',lease_until=null,claim_token=null,last_error=null,delivered_at=?
+                where id=? and status='DELIVERING' and claim_token=? and lease_until>?
+                """,Timestamp.from(clock.instant()),claim.id(),claim.token(),Timestamp.from(clock.instant()));
     }
     @Transactional void failed(Claim claim,String reason) {
         String safe=Set.of("RECIPIENT_DISABLED","RECIPIENT_EMAIL_MISSING","EMAIL_CHANNEL_DISABLED","EMAIL_DELIVERY_FAILED").contains(reason)?reason:"EMAIL_DELIVERY_FAILED";
         boolean dead=claim.attempts()>=MAX_ATTEMPTS;
         long seconds=Math.min(300,5L<<(Math.min(claim.attempts(),6)-1));
-        db.update("update email_notification_tasks set status=?,lease_until=null,last_error=?,next_attempt_at=? where id=? and status='DELIVERING'",
-                dead?"DEAD":"RETRY",safe,Timestamp.from(clock.instant().plusSeconds(seconds)),claim.id());
+        db.update("""
+                update email_notification_tasks set status=?,lease_until=null,claim_token=null,last_error=?,next_attempt_at=?
+                where id=? and status='DELIVERING' and claim_token=? and lease_until>?
+                """,dead?"DEAD":"RETRY",safe,Timestamp.from(clock.instant().plusSeconds(seconds)),claim.id(),claim.token(),Timestamp.from(clock.instant()));
     }
     @Transactional public void retry(UUID id) {
-        if(db.update("update email_notification_tasks set status='PENDING',attempts=0,next_attempt_at=?,lease_until=null,last_error=null where id=? and status in ('DEAD','RETRY')",
+        if(db.update("update email_notification_tasks set status='PENDING',attempts=0,next_attempt_at=?,lease_until=null,claim_token=null,last_error=null where id=? and status in ('DEAD','RETRY')",
                 Timestamp.from(clock.instant()),id)==0)throw ApiException.conflict("只能重试失败或等待重试的邮件任务");
     }
 }

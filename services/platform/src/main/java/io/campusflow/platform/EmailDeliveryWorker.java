@@ -18,9 +18,10 @@ public class EmailDeliveryWorker {
     @Scheduled(fixedDelayString="${platform.email-delivery-delay-ms}",initialDelayString="${platform.email-delivery-delay-ms}")
     public void deliver(){
         for(var claim:emails.claim(25,lease)){
+            if(!emails.prepareDelivery(claim))continue;
             if(!claim.recipientActive()){emails.failed(claim,"RECIPIENT_DISABLED");continue;}
             if(claim.email()==null||claim.email().isBlank()){emails.failed(claim,"RECIPIENT_EMAIL_MISSING");continue;}
-            try{mail.send(claim.id(),claim.email(),claim.title(),claim.body());emails.delivered(claim.id());}
+            try{mail.send(claim.id(),claim.email(),claim.title(),claim.body());emails.delivered(claim);}
             catch(MailChannelException exception){emails.failed(claim,exception.reason());}
             catch(Exception exception){emails.failed(claim,"EMAIL_DELIVERY_FAILED");}
         }
