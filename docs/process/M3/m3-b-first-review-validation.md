@@ -63,3 +63,9 @@ python scripts/check_repository.py
 2026-11-03，用户明确表示“我已经将命令验收，当前可以提交至仓库分支”。据此记录命令验收并提交/推送 B 独立分支；不表示浏览器演示、schema 同伴评审或真实 D/M1 联调已通过。前文“未提交/待人工验收”为交验时状态，当前授权仅更新此处确认范围。
 
 本分支包含 A 8a5fdb2 交接基础，不修改同学远程分支，不合并 main。远程 main 已继续推进，正式 PR 前需评审分支依赖及主线差异；冲突由人处理。最终提交哈希以 Git 历史为准，不在提交内容中预写自身哈希。
+
+## Linux CI 启动权限修复
+
+首次远程运行 41637653836（a40d0f9）中，maintenance-tests 运行步骤退出码126，汇总门禁随之失败；metadata/platform-tests/web-tests 成功。Git 中 M3 mvnw 为100644，工作流直接执行 ./mvnw；D 的相同脚本为100755。完整日志匿名API访问403，以上依据为公开check annotation、工作流及仓库文件模式核对。
+
+修复：只将 services/maintenance/mvnw 的 Git 可执行位改为100755，不修改脚本内容、业务逻辑或测试断言。Windows mvnw.cmd 不变。此前本机40项后端/46项前端测试和用户命令验收不等于Linux CI通过；修复后的远程结果以新提交对应Actions运行记录为准。
